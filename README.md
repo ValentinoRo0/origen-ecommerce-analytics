@@ -168,18 +168,19 @@ No todos los directorios necesitan existir desde el inicio; se completan a medid
 
 ## 🚧 Estado del proyecto
 
-**Fase actual:** Fase 1 — Procesos y reglas de negocio
+**Fase actual:** Fase 2 — Modelo de datos
 
 - [x] Definición del contexto empresarial
 - [x] Definición del problema rector
 - [x] Definición de objetivos y preguntas de negocio
 - [x] Definición del alcance
 - [x] Ciclo de vida del pedido
-- [ ] Ciclo de vida del stock
-- [ ] Recepción desde CD
-- [ ] Gestión de incidencias y matriz de resolución
-- [ ] Campaign Readiness
-- [ ] Reglas de negocio consolidadas
+- [x] Ciclo de vida del stock
+- [x] Recepción desde CD
+- [x] Gestión de incidencias y matriz de resolución
+- [x] Campaign Readiness
+- [x] Devoluciones
+- [x] Reglas de negocio consolidadas
 - [ ] Modelo de datos
 - [ ] Implementación SQL
 - [ ] ETL

@@ -168,7 +168,7 @@ No todos los directorios necesitan existir desde el inicio; se completan a medid
 
 ## 🚧 Estado del proyecto
 
-**Fase actual:** Fase 2 — Modelo de datos
+**Fase actual:** Fase 3 — Implementación SQL Server
 
 - [x] Definición del contexto empresarial
 - [x] Definición del problema rector
@@ -181,7 +181,8 @@ No todos los directorios necesitan existir desde el inicio; se completan a medid
 - [x] Campaign Readiness
 - [x] Devoluciones
 - [x] Reglas de negocio consolidadas
-- [ ] Modelo de datos
+- [x] Modelo de datos (dimensiones, hechos, relaciones)
+- [ ] Implementación SQL
 - [ ] Implementación SQL
 - [ ] ETL
 - [ ] Análisis Python

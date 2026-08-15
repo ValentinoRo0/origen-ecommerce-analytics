@@ -1,207 +1,198 @@
-# ORIGEN — E-commerce Operations & Supply Chain Analytics
+# ORIGEN — Modelo de Datos
+## Fase 2 ✅ Completa
 
-Proyecto de analítica de operaciones e-commerce orientado al monitoreo de pedidos, inventario, picking y cumplimiento de la promesa al cliente.
+---
 
-## 📌 Descripción
+## 1. Propósito del documento
 
-Origen es un proyecto de analítica de datos basado en un retailer ficticio de moda y lifestyle con operación omnicanal (venta online, despacho a domicilio y Click & Collect).
+Este documento traduce los procesos y reglas de negocio definidos en `01_procesos_y_reglas.md` a un modelo de datos conceptual y lógico: qué entidades existen, qué grano tiene cada tabla de hechos, y cómo se relacionan entre sí.
 
-El proyecto busca representar y analizar problemas reales de una operación e-commerce, especialmente aquellos relacionados con la disponibilidad de inventario, la preparación de pedidos, las incidencias operativas y el cumplimiento de los tiempos prometidos al cliente.
+No contiene código SQL (`CREATE TABLE`, tipos de dato exactos de motor, índices) — eso corresponde a `03_implementacion_sql.md`. Aquí se definen las decisiones de diseño; en Fase 3 se implementan.
 
-El objetivo no es construir un ERP ni replicar todo el ecosistema de e-commerce, sino desarrollar una solución analítica enfocada en **operaciones e-commerce**, utilizando datos simulados con patrones realistas de negocio.
+---
 
-## 🎯 Problema de negocio
+## 2. Decisión de granularidad
 
-Origen enfrenta situaciones en las que el stock mostrado por el sistema no coincide con la disponibilidad física real. Esto puede provocar que un pedido sea aceptado correctamente por el sistema, pero posteriormente falle durante el picking porque el producto no puede ser encontrado o no existe la cantidad necesaria.
+**Confirmado por el usuario**: el inventario, el picking y las incidencias se registran a nivel de **Variante/SKU** (producto × talla × color), no a nivel de producto genérico.
 
-```
-Diferencia entre stock sistema y stock físico
-                    ↓
-              Pedido aceptado
-                    ↓
-              Reserva de stock
-                    ↓
-                  Picking
-                    ↓
-          Producto no encontrado
-                    ↓
-                Incidencia
-                 ↙       ↘
-            Resuelto     No resuelto
-                             ↓
-                        Cancelación
-                             ↓
-                    Cliente afectado
-```
+**Consecuencia directa**: se separan dos dimensiones en lugar de una:
 
-Pregunta central del proyecto:
+- `DimProducto` — el concepto comercial (ej. "Camisa Oxford": nombre, categoría, marca).
+- `DimSKU` — la unidad real de inventario (esa camisa en una talla y color específicos), con `ProductoID` como FK hacia `DimProducto`.
 
-> ¿Cómo puede Origen utilizar sus datos operativos para vender mejor, cumplir la promesa hecha al cliente y reducir las incidencias que afectan la experiencia de compra?
+**Motivo**: evita repetir nombre, categoría y marca en cada una de las variantes de un mismo producto, y refleja correctamente que el stock se agota por variante, no por producto completo.
 
-En este proyecto, "vender mejor" se entiende como **evitar pérdidas de ventas por fallas operativas**, no como desarrollar una estrategia de marketing o pricing.
+### 2.1. Convención del código de SKU
 
-## 🎯 Objetivo
+El código de SKU visible (ej. `A58214`) es un **atributo del negocio**, único, pero **no es la clave primaria técnica** de `DimSKU`. La clave primaria es `SKUID`, un identificador interno simple (autoincremental) que usan las demás tablas para referenciar la fila.
 
-Diseñar y construir una solución analítica que permita:
+- Formato único y consistente: una letra + 5 dígitos (ej. `A58214`), sin guiones y sin significado codificado (el código no debe poder "leerse" para inferir talla/color — esa información vive en las columnas de `DimSKU`, no en el código).
+- Se almacena siempre como texto (no numérico), con restricción de unicidad (`UNIQUE`, a implementar en Fase 3).
+- Motivo de usar una clave técnica (`SKUID`) separada del código de negocio: si el formato del código cambiara en el futuro, no obliga a reescribir las tablas de hechos que lo referencian.
 
-- Monitorear la operación e-commerce.
-- Analizar pedidos e inventario.
-- Medir el cumplimiento de SLA.
-- Detectar incidencias durante el picking.
-- Identificar causas de cancelaciones.
-- Analizar diferencias entre stock del sistema y stock físico.
-- Evaluar el impacto de las incidencias sobre la experiencia del cliente.
-- Preparar la operación para periodos de alta demanda y campañas.
-- Generar recomendaciones accionables a partir de los datos.
+---
 
-## 🔎 Principales preguntas de negocio
+## 3. Dimensiones
 
-**Pedidos y cliente**
-- ¿Cuál es la tasa de cancelación por tienda, categoría y periodo?
-- ¿Qué proporción de pedidos incumple el SLA, y en qué etapa se genera el retraso?
-- ¿Qué porcentaje de cancelaciones se debe a problemas de stock?
+| Dimensión | Contenido | Notas |
+|---|---|---|
+| `DimProducto` | Producto comercial: nombre, categoría, marca | 1 fila = 1 producto |
+| `DimSKU` | Variante concreta: código de SKU, talla, color, `ProductoID` (FK) | 1 fila = 1 SKU; grano del inventario |
+| `DimTienda` | Tiendas de Origen | 1 fila = 1 tienda |
+| `DimCliente` | Datos mínimos del cliente | Sin CRM — solo lo necesario para vincular pedido y devolución |
+| `DimFecha` | Calendario, con marca de periodo de campaña | Conectada a casi todas las tablas de hechos (ver sección 5) |
+| `DimEstado` | Los 14 estados de línea de pedido (Fase 1, sección 3.2), con indicador `EsFinal` | Estandariza el texto libre de estado |
+| `DimArea` | Tienda/Picking, Operaciones E-commerce, Abastecimiento, CD | Áreas que aparecen como responsables en la matriz de resolución (Fase 1, sección 6.3) |
+| `DimMotivo` | Todos los motivos del proyecto, con columna `TipoMotivo` (`incidencia` / `cancelacion` / `ajuste_stock` / `devolucion`) | Tabla compartida entre 4 contextos distintos — ver sección 4.6 |
 
-**Inventario y picking**
-- ¿Qué tiendas presentan mayores diferencias entre stock sistema y stock físico?
-- ¿Cuál es el tiempo promedio de picking y qué proporción de líneas tiene incidencia?
+**Excluidas deliberadamente**: `DimCanal` (solo dos modalidades — despacho/recojo — se maneja como atributo, no como dimensión propia) y `DimVariante` separado de `DimSKU` (sería un snowflake innecesario a esta escala).
 
-**Causas**
-- ¿Qué combinación de tienda, categoría y periodo concentra más incidencias?
-- ¿Existe relación entre recepciones incompletas del CD y problemas posteriores de disponibilidad?
+---
 
-**Campañas**
-- ¿Las campañas incrementan las incidencias y cancelaciones?
-- ¿El stock y la capacidad operativa están preparados antes de una campaña?
+## 4. Tablas de hechos
 
-**Devoluciones**
-- ¿Cuál es la tasa de devolución por categoría, tienda y periodo?
+### 4.1. `FactPedidoDetalle`
 
-## 🏗️ Alcance
+**Grano**: 1 fila = 1 línea de pedido (Pedido × SKU).
 
-**Dentro del alcance:** pedidos, inventario, stock sistema vs. físico, picking e incidencias, ciclo de vida del pedido, recepción simplificada desde CD, SLA, cancelaciones, tasa de devoluciones, matriz de resolución de incidencias, Campaign Readiness, KPIs, Control Tower en Power BI.
+| Columna | Tipo de referencia | Notas |
+|---|---|---|
+| `LineaID` | PK | |
+| `PedidoID` | — | Agrupa líneas del mismo pedido (no existe tabla de cabecera separada — ver sección 4.7) |
+| `ClienteID` | FK → `DimCliente` | |
+| `SKUID` | FK → `DimSKU` | |
+| `TiendaID` | FK → `DimTienda` | |
+| `FechaID` | FK → `DimFecha` | Fecha de creación del pedido |
+| `Canal` | — | `despacho` / `recojo` |
+| `Cantidad` | — | |
+| `EstadoActualID` | FK → `DimEstado` | Denormalizado — ver sección 4.5 |
+| `MotivoCancelacionID` | FK → `DimMotivo` (nulo salvo cancelado) | |
 
-**Fuera del alcance:** CRM, email marketing, ROAS/inversión publicitaria, análisis de márgenes, pricing como dominio propio, multi-marketplace, forecasting avanzado, Machine Learning, automatización de comunicación al cliente, gestión completa de devoluciones/proveedores/transporte.
+### 4.2. `FactHistorialEstadoLinea`
 
-Estas funcionalidades podrían desarrollarse como proyectos o extensiones independientes.
+**Grano**: 1 fila = 1 transición de estado de una línea de pedido.
 
-## 🏢 Modelo de negocio
+| Columna | Tipo de referencia | Notas |
+|---|---|---|
+| `HistorialID` | PK | |
+| `LineaID` | FK → `FactPedidoDetalle` | |
+| `EstadoID` | FK → `DimEstado` | |
+| `FechaID` | FK → `DimFecha` | |
+| `FechaHora` | — | Timestamp completo, para precisión de hora |
 
-Origen es un retailer ficticio de moda y lifestyle (ropa, calzado, accesorios, perfumería), con operación omnicanal: venta online, despacho a domicilio, Click & Collect, preparación desde tiendas y abastecimiento desde un Centro de Distribución.
+Es la **fuente de verdad** de la trayectoria del pedido — de aquí se calculan tiempos de picking, cumplimiento de SLA y la brecha cancelación–notificación (Fase 1, RN-005/RN-008).
 
-## 🛠️ Tecnologías
+### 4.3. `FactMovimientoInventario`
 
-| Tecnología | Uso |
-|---|---|
-| SQL Server / T-SQL | Modelo de datos, integridad y lógica transaccional |
-| Python / Pandas / NumPy | Generación de datos, EDA y análisis puntual |
-| Power BI | Modelo semántico, KPIs y dashboard |
-| Git / GitHub | Control de versiones y documentación |
+**Grano**: 1 fila = 1 movimiento individual de inventario, identificado por `MovimientoID` propio (no por la combinación SKU+Tienda+Tipo+Fecha, que no garantiza unicidad).
 
-Las herramientas adicionales se incorporarán únicamente cuando una necesidad concreta del proyecto las justifique.
+| Columna | Tipo de referencia | Notas |
+|---|---|---|
+| `MovimientoID` | PK | |
+| `SKUID` | FK → `DimSKU` | |
+| `TiendaID` | FK → `DimTienda` | |
+| `FechaID` | FK → `DimFecha` | |
+| `FechaHora` | — | |
+| `TipoMovimiento` | — | `INGRESO` / `RESERVA` / `LIBERACION_RESERVA` / `DESCUENTO_DEFINITIVO` / `AJUSTE` |
+| `Origen` | — | Ej. `RECEPCION_CD`, `PEDIDO`, `CANCELACION`, `CONTEO_FISICO` |
+| `Cantidad` | — | Con signo (+ ingreso, − salida) |
+| `LineaID` | FK → `FactPedidoDetalle` (opcional) | Poblado solo cuando el movimiento es `RESERVA`, `LIBERACION_RESERVA` o `DESCUENTO_DEFINITIVO` |
+| `CantidadEsperada` / `CantidadRecibida` / `Discrepancia` | — (opcional) | Poblados solo cuando `Origen = RECEPCION_CD` |
+| `MotivoID` | FK → `DimMotivo` (opcional) | Poblado cuando `TipoMovimiento = AJUSTE` |
 
-## 🔄 Arquitectura prevista
+Incluye la recepción del CD como un caso particular de `INGRESO` — no existe una tabla `FactRecepcionCD` independiente (ver sección 4.7).
 
-```
-Datos simulados → SQL Server → Views/consultas analíticas
-     → Python/Pandas → Power BI → Control Tower
-     → Hallazgos y recomendaciones
-```
+### 4.4. `FactIncidencia`
 
-La arquitectura se irá refinando durante las siguientes fases.
+**Grano**: 1 fila = 1 incidencia puntual (no incluye incidencias de monitoreo — ver sección 4.6).
 
-## 📂 Estructura del proyecto
+| Columna | Tipo de referencia | Notas |
+|---|---|---|
+| `IncidenciaID` | PK | |
+| `TipoIncidencia` | — | `no_encontrado` / `cantidad_insuficiente` / `dañado` / `recepcion_incompleta` |
+| `LineaID` | FK → `FactPedidoDetalle` (opcional) | Poblado si el tipo es `no_encontrado`, `cantidad_insuficiente` o `dañado` |
+| `MovimientoID` | FK → `FactMovimientoInventario` (opcional) | Poblado si el tipo es `recepcion_incompleta` |
+| `MotivoID` | FK → `DimMotivo` | |
+| `AreaAtencionID` | FK → `DimArea` | Primer respondedor (Fase 1, sección 6.1) |
+| `AreaEscaladaID` | FK → `DimArea` (opcional) | Solo si hubo escalamiento (RN-019) |
+| `FechaID` | FK → `DimFecha` | |
+| `FechaDeteccion` | — | |
+| `EstadoResolucion` | — | `en_atencion` / `resuelta` / `escalada` / `no_resuelta` |
+| `FechaResolucion` | — (opcional) | |
 
-```
-ORIGEN/
-├── README.md
-├── docs/
-│   ├── 00_contexto_y_alcance.md
-│   ├── 01_procesos_y_reglas.md
-│   ├── 02_modelo_de_datos.md
-│   ├── 03_implementacion_sql.md
-│   ├── 04_etl.md
-│   ├── 05_analisis_python.md
-│   ├── 06_kpis.md
-│   ├── 07_power_bi.md
-│   ├── 08_hallazgos_y_recomendaciones.md
-│   └── Glosario.md
-├── data/
-│   ├── raw/
-│   └── processed/
-├── sql/
-│   ├── 01_database/
-│   ├── 02_tables/
-│   ├── 03_constraints/
-│   ├── 04_stored_procedures/
-│   ├── 05_views/
-│   └── 06_seed_data/
-├── etl/
-│   ├── extract/
-│   ├── transform/
-│   └── load/
-├── python/
-│   ├── eda/
-│   ├── analysis/
-│   └── utils/
-├── powerbi/
-│   └── Origen.pbix
-└── assets/
-    ├── diagrams/
-    └── screenshots/
-```
+**Regla de integridad**: exactamente una de `LineaID` / `MovimientoID` debe estar poblada, según `TipoIncidencia` — nunca ambas, nunca ninguna.
 
-No todos los directorios necesitan existir desde el inicio; se completan a medida que avanza cada fase.
+### 4.5. `FactDevolucion`
 
-## 📚 Documentación
+**Grano**: 1 fila = 1 devolución, vinculada a una línea de pedido en estado `Completado`.
 
-| Documento | Contenido |
-|---|---|
-| Contexto y alcance | Problema, objetivos, preguntas de negocio y alcance |
-| Procesos y reglas | Procesos operativos y reglas de negocio |
-| Modelo de datos | Modelo conceptual, lógico y físico |
-| Implementación SQL | Tablas, restricciones, procedimientos y vistas |
-| ETL | Extracción, transformación y carga |
-| Análisis Python | EDA y análisis exploratorio |
-| KPIs | Definición y cálculo de indicadores |
-| Power BI | Modelo semántico y dashboard |
-| Hallazgos | Resultados y recomendaciones |
+| Columna | Tipo de referencia | Notas |
+|---|---|---|
+| `DevolucionID` | PK | |
+| `LineaID` | FK → `FactPedidoDetalle` | Debe estar en estado `Completado` (RN-026) |
+| `MotivoID` | FK → `DimMotivo` | |
+| `FechaID` | FK → `DimFecha` | |
+| `FechaDevolucion` | — | Debe estar dentro de la ventana de devolución (RN-027) |
 
-## 🚧 Estado del proyecto
+### 4.6. Decisión: incidencias de monitoreo quedan fuera de `FactIncidencia`
 
-**Fase actual:** Fase 3 — Implementación SQL Server
+Las incidencias de monitoreo (SLA próximo a incumplir, stock crítico, tasa anómala — Fase 1, sección 6.2) **no se modelan como tabla de hechos**. No son un evento que ocurre y se registra; son una condición calculada cuando un KPI cruza un umbral. Se resuelven en Fase 6 mediante vistas/medidas sobre los KPIs ya calculados. Si en el futuro se necesita historial de cuándo se disparó cada alerta, se agrega entonces — no antes, porque hoy ninguna pregunta de negocio lo exige.
 
-- [x] Definición del contexto empresarial
-- [x] Definición del problema rector
-- [x] Definición de objetivos y preguntas de negocio
-- [x] Definición del alcance
-- [x] Ciclo de vida del pedido
-- [x] Ciclo de vida del stock
-- [x] Recepción desde CD
-- [x] Gestión de incidencias y matriz de resolución
-- [x] Campaign Readiness
-- [x] Devoluciones
-- [x] Reglas de negocio consolidadas
-- [x] Modelo de datos (dimensiones, hechos, relaciones)
-- [ ] Implementación SQL
-- [ ] Implementación SQL
-- [ ] ETL
-- [ ] Análisis Python
-- [ ] KPIs
-- [ ] Dashboard Power BI
-- [ ] Hallazgos y recomendaciones
+### 4.7. Decisiones de diseño que evitan tablas innecesarias
 
-## 👤 Rol simulado
+| Decisión | Resolución | Motivo |
+|---|---|---|
+| ¿Tabla de cabecera de pedido separada de la línea? | No | A esta escala, repetir cliente/fecha/canal por línea es aceptable; una tabla aparte solo para eso sería sobreingeniería |
+| ¿`FactRecepcionCD` como tabla independiente? | No | Es un caso particular de `FactMovimientoInventario` (RN-017) |
+| ¿Estado del pedido completo como campo propio? | No, se deriva | Se calcula a partir de `EstadoActualID` de todas sus líneas (Completado solo si todas lo están; Cancelado solo si todas lo están; si no, `Parcial`) — evita mantener dos estados sincronizados |
+| ¿`EstadoActualID` denormalizado en `FactPedidoDetalle`? | Sí | El historial es la fuente de verdad; el campo actual evita recorrer el historial en cada consulta simple de KPI. Se mantiene sincronizado por un mecanismo a decidir en Fase 3 (SP, trigger o transacción — no se fija aquí) |
 
-Durante el proyecto se simula el rol de **Analista de Operaciones E-commerce**: monitorear indicadores, detectar desviaciones operativas, analizar causas y proponer acciones de mejora en coordinación con las áreas involucradas.
+---
 
-## 📈 Resultado esperado
+## 5. Conexión a `DimFecha`
+
+`DimFecha` se conecta explícitamente (mediante `FechaID`) a las siguientes tablas de hechos, no solo a `FactPedidoDetalle`: `FactHistorialEstadoLinea`, `FactMovimientoInventario`, `FactIncidencia`, `FactDevolucion`. Motivo: las preguntas de negocio piden constantemente segmentación "por periodo", y sin esta conexión explícita Power BI tendría que extraer la fecha del timestamp en tiempo de consulta — más lento y menos limpio para el modelo semántico de Fase 7.
+
+---
+
+## 6. Mapa de relaciones
 
 ```
-Datos operativos → Información → Indicadores → Diagnóstico → Acciones
+DimProducto (1) ── (N) DimSKU
+                              │
+DimCliente (1) ── (N) ────────┤
+DimTienda  (1) ── (N) ────────┼──── FactPedidoDetalle ──(N:1)── DimFecha
+                              │              │
+                              │              ├──(1:N)── FactHistorialEstadoLinea ──(N:1)── DimEstado
+                              │              │                                    ──(N:1)── DimFecha
+                              │              │
+                              │              ├──(1:N, opcional)── FactIncidencia ──(N:1)── DimArea (atención)
+                              │              │                                   ──(N:1)── DimArea (escalada, opcional)
+                              │              │                                   ──(N:1)── DimMotivo
+                              │              │                                   ──(N:1)── DimFecha
+                              │              │
+                              │              └──(1:N)── FactDevolucion ──(N:1)── DimMotivo
+                              │                                         ──(N:1)── DimFecha
+                              │
+                              └──── FactMovimientoInventario ──(N:1)── DimTienda
+                                            │              ──(N:1)── DimFecha
+                                            ├──(N:1, opcional)── FactPedidoDetalle (vía LineaID)
+                                            ├──(N:1, opcional)── FactIncidencia (referenciada desde ahí, vía MovimientoID)
+                                            └──(N:1, opcional)── DimMotivo
 ```
 
-Un Control Tower de Operaciones E-commerce acompañado de documentación técnica y de negocio que explique no solo qué muestran los datos, sino por qué se diseñó la solución de esa manera y qué decisiones puede apoyar.
+---
 
-## 📌 Nota
+## 7. Resumen de tablas
 
-Origen es un proyecto ficticio desarrollado con fines educativos y de portafolio. Los datos utilizados son simulados y diseñados para representar escenarios plausibles de una operación e-commerce de retail.
+**Dimensiones (8)**: `DimProducto`, `DimSKU`, `DimTienda`, `DimCliente`, `DimFecha`, `DimEstado`, `DimArea`, `DimMotivo`
+
+**Hechos (5)**: `FactPedidoDetalle`, `FactHistorialEstadoLinea`, `FactMovimientoInventario`, `FactIncidencia`, `FactDevolucion`
+
+Cada tabla de hechos se justifica contra al menos una pregunta de negocio de `00_contexto_y_alcance.md` (sección 7) — ninguna se agregó por completitud.
+
+---
+
+## 8. Siguiente paso
+
+Fase 3 — Implementación SQL Server (`03_implementacion_sql.md`): convertir este modelo en `CREATE TABLE`, definir tipos de dato exactos, constraints (`CHECK`, `UNIQUE`, `FOREIGN KEY`), y decidir la implementación de `EstadoActualID` (trigger, stored procedure o transacción — pendiente de la sección 4.7).

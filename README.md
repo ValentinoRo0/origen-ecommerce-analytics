@@ -132,9 +132,10 @@ ORIGEN/
 │   ├── 01_database/
 │   ├── 02_tables/
 │   ├── 03_constraints/
-│   ├── 04_stored_procedures/
-│   ├── 05_views/
-│   └── 06_seed_data/
+    ├── 04_triggers/
+│   ├── 05_stored_procedures/
+│   ├── 06_views/
+│   └── 07_seed_data/
 ├── etl/
 │   ├── extract/
 │   ├── transform/

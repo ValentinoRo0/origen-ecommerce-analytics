@@ -3,6 +3,13 @@
 ORIGEN — Pruebas de sp_ProcesarVencimientosRecojo y sp_RegistrarDevolucion
 Fase 3 — Implementación SQL Server (2ª ronda, ampliadas)
 ===============================================================================
+CORRECCIÓN respecto a la versión anterior: T-SQL no permite llamar funciones
+(como SYSDATETIME()) directamente como valor de un parámetro en un EXEC; eso
+producía "Msg 102 Incorrect syntax near ')'". Ahora el instante actual se
+guarda en la variable @Ahora (SET @Ahora = SYSDATETIME();) inmediatamente
+antes de cada llamada, y se pasa la variable. La lógica de las pruebas no
+cambió.
+
 Vencimiento:
 1. Ejecución normal (línea de 10 días vence).
 2. Línea de 1 día no vence todavía.
@@ -39,6 +46,7 @@ DECLARE @Resultado VARCHAR(20), @LineasProcesadas INT, @DevolucionID INT;
 DECLARE @MotivoVencimientoID INT, @MotivoDevolucionID INT, @MotivoIncidenciaID INT;
 DECLARE @EstadoID_DisponibleRecojo INT, @EstadoID_Completado INT;
 DECLARE @ConteoLiberaciones INT;
+DECLARE @Ahora DATETIME2;   -- instante actual, refrescado antes de cada EXEC
 
 INSERT INTO dbo.DimProducto (NombreProducto, Categoria, Marca) VALUES (N'Producto de prueba', N'Categoria de prueba', NULL);
 SET @ProductoID = SCOPE_IDENTITY();
@@ -96,8 +104,9 @@ VALUES (@LineaNoVence, @EstadoID_DisponibleRecojo, @FechaID, DATEADD(DAY, -1, SY
 
 -- Caso 1 y 2: primera ejecución
 BEGIN TRY
+    SET @Ahora = SYSDATETIME();
     EXEC dbo.sp_ProcesarVencimientosRecojo
-        @FechaHoraActual = SYSDATETIME(), @DiasVentanaRecojo = 3, @FechaID = @FechaID,
+        @FechaHoraActual = @Ahora, @DiasVentanaRecojo = 3, @FechaID = @FechaID,
         @MotivoVencimientoID = @MotivoVencimientoID, @LineasProcesadas = @LineasProcesadas OUTPUT;
 
     IF @LineasProcesadas = 1
@@ -113,8 +122,9 @@ BEGIN CATCH PRINT N'[ERROR]  Casos 1-2 no debían fallar: ' + ERROR_MESSAGE(); E
 
 -- Caso 3: segunda ejecución sobre las mismas líneas → no debe reprocesar
 BEGIN TRY
+    SET @Ahora = SYSDATETIME();
     EXEC dbo.sp_ProcesarVencimientosRecojo
-        @FechaHoraActual = SYSDATETIME(), @DiasVentanaRecojo = 3, @FechaID = @FechaID,
+        @FechaHoraActual = @Ahora, @DiasVentanaRecojo = 3, @FechaID = @FechaID,
         @MotivoVencimientoID = @MotivoVencimientoID, @LineasProcesadas = @LineasProcesadas OUTPUT;
 
     IF @LineasProcesadas = 0
@@ -150,8 +160,9 @@ VALUES (@LineaFallaRecuperacion, @EstadoID_DisponibleRecojo, @FechaID, DATEADD(D
 
 -- Primera ejecución: la línea vence, pero el MotivoID inválido hace fallar
 -- sp_CancelarPedido dentro de la Parte 1. Debe quedar en Vencido, sin cancelar.
+SET @Ahora = SYSDATETIME();
 EXEC dbo.sp_ProcesarVencimientosRecojo
-    @FechaHoraActual = SYSDATETIME(), @DiasVentanaRecojo = 3, @FechaID = @FechaID,
+    @FechaHoraActual = @Ahora, @DiasVentanaRecojo = 3, @FechaID = @FechaID,
     @MotivoVencimientoID = @MotivoInvalido, @LineasProcesadas = @LineasProcesadas OUTPUT;
 
 IF EXISTS (SELECT 1 FROM dbo.FactPedidoDetalle fp INNER JOIN dbo.DimEstado e ON e.EstadoID = fp.EstadoActualID
@@ -162,8 +173,9 @@ ELSE
 
 -- Segunda ejecución: ahora con el motivo CORRECTO. La Parte 2 debe detectar
 -- la línea huérfana (Vencido + reserva activa) y completarla.
+SET @Ahora = SYSDATETIME();
 EXEC dbo.sp_ProcesarVencimientosRecojo
-    @FechaHoraActual = SYSDATETIME(), @DiasVentanaRecojo = 3, @FechaID = @FechaID,
+    @FechaHoraActual = @Ahora, @DiasVentanaRecojo = 3, @FechaID = @FechaID,
     @MotivoVencimientoID = @MotivoVencimientoID, @LineasProcesadas = @LineasProcesadas OUTPUT;
 
 IF EXISTS (SELECT 1 FROM dbo.FactPedidoDetalle fp INNER JOIN dbo.DimEstado e ON e.EstadoID = fp.EstadoActualID
@@ -183,16 +195,18 @@ VALUES (@LineaDevolucion1, @EstadoID_Completado, @FechaID, DATEADD(DAY, -5, SYSD
 
 -- Caso 1: dentro de ventana → OK
 BEGIN TRY
+    SET @Ahora = SYSDATETIME();
     EXEC dbo.sp_RegistrarDevolucion @LineaID=@LineaDevolucion1, @MotivoID=@MotivoDevolucionID, @FechaID=@FechaID,
-        @FechaDevolucion=SYSDATETIME(), @DiasVentanaDevolucion=7, @DevolucionID=@DevolucionID OUTPUT;
+        @FechaDevolucion=@Ahora, @DiasVentanaDevolucion=7, @DevolucionID=@DevolucionID OUTPUT;
     PRINT N'[OK]     Devolución Caso 1 — Registrada dentro de la ventana.';
 END TRY
 BEGIN CATCH PRINT N'[ERROR]  Devolución Caso 1 no debía fallar: ' + ERROR_MESSAGE(); END CATCH;
 
 -- Caso 2: segunda devolución sobre la misma línea → falla
 BEGIN TRY
+    SET @Ahora = SYSDATETIME();
     EXEC dbo.sp_RegistrarDevolucion @LineaID=@LineaDevolucion1, @MotivoID=@MotivoDevolucionID, @FechaID=@FechaID,
-        @FechaDevolucion=SYSDATETIME(), @DiasVentanaDevolucion=7, @DevolucionID=@DevolucionID OUTPUT;
+        @FechaDevolucion=@Ahora, @DiasVentanaDevolucion=7, @DevolucionID=@DevolucionID OUTPUT;
     PRINT N'[FALLO]  Devolución Caso 2 — Se permitió una segunda devolución.';
 END TRY
 BEGIN CATCH PRINT N'[OK]     Devolución Caso 2 — Rechazada correctamente: ' + ERROR_MESSAGE(); END CATCH;
@@ -204,8 +218,9 @@ INSERT INTO dbo.FactHistorialEstadoLinea (LineaID, EstadoID, FechaID, FechaHora)
 VALUES (@LineaDevolucion2, @EstadoID_Completado, @FechaID, DATEADD(DAY, -20, SYSDATETIME()));
 
 BEGIN TRY
+    SET @Ahora = SYSDATETIME();
     EXEC dbo.sp_RegistrarDevolucion @LineaID=@LineaDevolucion2, @MotivoID=@MotivoDevolucionID, @FechaID=@FechaID,
-        @FechaDevolucion=SYSDATETIME(), @DiasVentanaDevolucion=7, @DevolucionID=@DevolucionID OUTPUT;
+        @FechaDevolucion=@Ahora, @DiasVentanaDevolucion=7, @DevolucionID=@DevolucionID OUTPUT;
     PRINT N'[FALLO]  Devolución Caso 3 — Se permitió fuera de la ventana.';
 END TRY
 BEGIN CATCH PRINT N'[OK]     Devolución Caso 3 — Rechazada correctamente: ' + ERROR_MESSAGE(); END CATCH;
@@ -217,8 +232,9 @@ INSERT INTO dbo.FactHistorialEstadoLinea (LineaID, EstadoID, FechaID, FechaHora)
 VALUES (@LineaDevolucion3, @EstadoID_Completado, @FechaID, SYSDATETIME());
 
 BEGIN TRY
+    SET @Ahora = SYSDATETIME();
     EXEC dbo.sp_RegistrarDevolucion @LineaID=@LineaDevolucion3, @MotivoID=@MotivoIncidenciaID, @FechaID=@FechaID,
-        @FechaDevolucion=SYSDATETIME(), @DiasVentanaDevolucion=7, @DevolucionID=@DevolucionID OUTPUT;
+        @FechaDevolucion=@Ahora, @DiasVentanaDevolucion=7, @DevolucionID=@DevolucionID OUTPUT;
     PRINT N'[FALLO]  Devolución Caso 4 — Se permitió un motivo de tipo incorrecto.';
 END TRY
 BEGIN CATCH PRINT N'[OK]     Devolución Caso 4 — Rechazada correctamente: ' + ERROR_MESSAGE(); END CATCH;
@@ -228,8 +244,9 @@ EXEC dbo.sp_CrearPedido @PedidoID=920006, @ClienteID=@ClienteID, @SKUID=@SKUID, 
     @FechaID=@FechaID, @Canal=N'recojo', @Cantidad=1, @LineaID=@LineaNoCompletada OUTPUT, @Resultado=@Resultado OUTPUT;
 
 BEGIN TRY
+    SET @Ahora = SYSDATETIME();
     EXEC dbo.sp_RegistrarDevolucion @LineaID=@LineaNoCompletada, @MotivoID=@MotivoDevolucionID, @FechaID=@FechaID,
-        @FechaDevolucion=SYSDATETIME(), @DiasVentanaDevolucion=7, @DevolucionID=@DevolucionID OUTPUT;
+        @FechaDevolucion=@Ahora, @DiasVentanaDevolucion=7, @DevolucionID=@DevolucionID OUTPUT;
     PRINT N'[FALLO]  Devolución Caso 5 — Se permitió sobre una línea no Completada.';
 END TRY
 BEGIN CATCH PRINT N'[OK]     Devolución Caso 5 — Rechazada correctamente: ' + ERROR_MESSAGE(); END CATCH;

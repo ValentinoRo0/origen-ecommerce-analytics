@@ -110,6 +110,7 @@ BEGIN
 
             INSERT INTO dbo.FactHistorialEstadoLinea (LineaID, EstadoID, FechaID, FechaHora)
             VALUES (@LineaID, @EstadoID_PedidoCreado, @FechaID, SYSDATETIME());
+            -- Dispara trg_ActualizarEstadoActual (EstadoActualID = mismo valor ya escrito arriba)
 
             -- Dispara trg_ActualizarStockSKUTienda, que incrementa StockReservado
             INSERT INTO dbo.FactMovimientoInventario
@@ -131,6 +132,7 @@ BEGIN
 
             INSERT INTO dbo.FactHistorialEstadoLinea (LineaID, EstadoID, FechaID, FechaHora)
             VALUES (@LineaID, @EstadoID_Rechazado, @FechaID, SYSDATETIME());
+            -- Dispara trg_ActualizarEstadoActual (EstadoActualID = mismo valor ya escrito arriba)
 
             SET @Resultado = N'RECHAZADO';
         END

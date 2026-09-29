@@ -65,7 +65,7 @@ El código de SKU visible (ej. `A58214`) es un **atributo del negocio**, único,
 | `FechaID` | FK → `DimFecha` | Fecha de creación del pedido |
 | `Canal` | — | `despacho` / `recojo` |
 | `Cantidad` | — | |
-| `EstadoActualID` | FK → `DimEstado` | Denormalizado — ver sección 4.5 |
+| `EstadoActualID` | FK → `DimEstado` | Denormalizado y sincronizado por trigger — ver sección 4.7 |
 | `MotivoCancelacionID` | FK → `DimMotivo` (nulo salvo cancelado) | |
 
 ### 4.2. `FactHistorialEstadoLinea`
@@ -80,7 +80,7 @@ El código de SKU visible (ej. `A58214`) es un **atributo del negocio**, único,
 | `FechaID` | FK → `DimFecha` | |
 | `FechaHora` | — | Timestamp completo, para precisión de hora |
 
-Es la **fuente de verdad** de la trayectoria del pedido — de aquí se calculan tiempos de picking, cumplimiento de SLA y la brecha cancelación–notificación (Fase 1, RN-005/RN-008).
+Es la **fuente de verdad** de la trayectoria del pedido — de aquí se calculan tiempos de picking, cumplimiento de SLA y la brecha cancelación–notificación (Fase 1, RN-005/RN-008). La copia `EstadoActualID` de `FactPedidoDetalle` se mantiene automáticamente sincronizada con la última fila de esta tabla mediante `trg_ActualizarEstadoActual` (Fase 3 — ver `03_implementacion_sql.md`, sección 6.1).
 
 ### 4.3. `FactMovimientoInventario`
 
@@ -145,7 +145,7 @@ Las incidencias de monitoreo (SLA próximo a incumplir, stock crítico, tasa an�
 | ¿Tabla de cabecera de pedido separada de la línea? | No | A esta escala, repetir cliente/fecha/canal por línea es aceptable; una tabla aparte solo para eso sería sobreingeniería |
 | ¿`FactRecepcionCD` como tabla independiente? | No | Es un caso particular de `FactMovimientoInventario` (RN-017) |
 | ¿Estado del pedido completo como campo propio? | No, se deriva | Se calcula a partir de `EstadoActualID` de todas sus líneas (Completado solo si todas lo están; Cancelado solo si todas lo están; si no, `Parcial`) — evita mantener dos estados sincronizados |
-| ¿`EstadoActualID` denormalizado en `FactPedidoDetalle`? | Sí | El historial es la fuente de verdad; el campo actual evita recorrer el historial en cada consulta simple de KPI. Se mantiene sincronizado por un mecanismo a decidir en Fase 3 (SP, trigger o transacción — no se fija aquí) |
+| ¿`EstadoActualID` denormalizado en `FactPedidoDetalle`? | Sí | El historial es la fuente de verdad; el campo actual evita recorrer el historial en cada consulta simple de KPI. Se mantiene sincronizado automáticamente por `trg_ActualizarEstadoActual` (`AFTER INSERT` sobre `FactHistorialEstadoLinea`) — ver `03_implementacion_sql.md`, sección 6.1 |
 
 ---
 
@@ -195,4 +195,4 @@ Cada tabla de hechos se justifica contra al menos una pregunta de negocio de `00
 
 ## 8. Siguiente paso
 
-Fase 3 — Implementación SQL Server (`03_implementacion_sql.md`): convertir este modelo en `CREATE TABLE`, definir tipos de dato exactos, constraints (`CHECK`, `UNIQUE`, `FOREIGN KEY`), y decidir la implementación de `EstadoActualID` (trigger, stored procedure o transacción — pendiente de la sección 4.7).
+Fase 3 — Implementación SQL Server (`03_implementacion_sql.md`): convertir este modelo en `CREATE TABLE`, definir tipos de dato exactos, constraints (`CHECK`, `UNIQUE`, `FOREIGN KEY`) y la sincronización de `EstadoActualID`. **Realizado**: las tablas y constraints existen, y la sincronización quedó implementada con `trg_ActualizarEstadoActual` (el mecanismo decidido de los tres que evaluaba la sección 4.7 — trigger, SP o transacción — fue el trigger, porque centraliza la copia en un solo punto).

@@ -20,7 +20,8 @@ corrección sobre XACT_ABORT) — cada EXEC corre de forma independiente,
 igual que en el uso real, y la limpieza al final es con DELETE explícito.
 
 Requisito: haber ejecutado ya 09_stock_sku_tienda.sql,
-03_actualizar_stock_sku_tienda.sql y 01_sp_crear_pedido.sql.
+03_actualizar_stock_sku_tienda.sql, 04_actualizar_estado_actual.sql
+(trigger de sincronización de EstadoActualID) y 01_sp_crear_pedido.sql.
 ===============================================================================
 */
 

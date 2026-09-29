@@ -202,6 +202,16 @@ BEGIN TRY
 END TRY
 BEGIN CATCH PRINT N'[ERROR]  Devolución Caso 1 no debía fallar: ' + ERROR_MESSAGE(); END CATCH;
 
+-- Caso 1b (3ª ronda): la devolución es un EVENTO posterior a Completado,
+-- no un estado — no debe tocar FactPedidoDetalle.EstadoActualID ni
+-- agregar filas de historial de estado.
+IF EXISTS (SELECT 1 FROM dbo.FactPedidoDetalle fp
+           INNER JOIN dbo.DimEstado e ON e.EstadoID = fp.EstadoActualID
+           WHERE fp.LineaID = @LineaDevolucion1 AND e.NombreEstado = N'Completado')
+    PRINT N'[OK]     Devolución Caso 1b — EstadoActualID sigue en Completado (la devolución no cambia el estado).';
+ELSE
+    PRINT N'[FALLO]  Devolución Caso 1b — EstadoActualID cambió tras registrar la devolución.';
+
 -- Caso 2: segunda devolución sobre la misma línea → falla
 BEGIN TRY
     SET @Ahora = SYSDATETIME();

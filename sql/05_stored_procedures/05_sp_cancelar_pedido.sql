@@ -23,6 +23,24 @@ VERSIÓN CORREGIDA (2ª ronda), 2 cambios:
    ReservaActiva=3 (una inconsistencia real de datos) se cancelaba
    liberando solo 3, ocultando la discrepancia. Ahora se rechaza y se
    reporta la inconsistencia explícitamente.
+
+3ª RONDA — cierre del flujo de estados, 2 cambios adicionales:
+
+3. El estado real de la línea ya NO se lee de la copia denormalizada
+   EstadoActualID (que quedaba obsoleta: solo sp_CrearPedido la escribía
+   y el trigger trg_ActualizarEstadoActual no existía — esa era la causa
+   directa del fallo 51033 de siempre). Ahora se lee de la última fila de
+   FactHistorialEstadoLinea (fuente de verdad, RN-008) bajo el bloqueo de
+   la línea. La verificación final SÍ consulta EstadoActualID: pasa a
+   validar que el trigger dejó la copia sincronizada tras el INSERT.
+
+4. Orígenes de la cancelación voluntaria exactos según el contrato
+   funcional: Pedido creado, Asignado a picking o Picking en proceso.
+   'Empaquetado' sigue bloqueado con 51019 (decisión pendiente 1, sin
+   cambio) — RN-009 lo permite pero contradice RN-012 sobre el stock ya
+   descontado; la contradicción se mantiene documentada, no se resuelve en
+   silencio. Incidencia y vencimiento ya validaban origen exacto: sin
+   cambios.
 ===============================================================================
 */
 
@@ -45,7 +63,7 @@ BEGIN
     SET XACT_ABORT ON;
 
     DECLARE @NombreMotivo VARCHAR(50), @TipoMotivoEncontrado VARCHAR(20);
-    DECLARE @SKUID INT, @TiendaID INT, @Cantidad INT, @EstadoActualID INT;
+    DECLARE @SKUID INT, @TiendaID INT, @Cantidad INT;
     DECLARE @NombreEstadoActual VARCHAR(40);
     DECLARE @EstadoID_Cancelado INT;
     DECLARE @ReservaActiva INT;
@@ -73,15 +91,22 @@ BEGIN
         BEGIN TRANSACTION;
 
         SELECT
-            @SKUID = SKUID, @TiendaID = TiendaID, @Cantidad = Cantidad,
-            @EstadoActualID = EstadoActualID
+            @SKUID = SKUID, @TiendaID = TiendaID, @Cantidad = Cantidad
         FROM dbo.FactPedidoDetalle WITH (UPDLOCK, ROWLOCK, HOLDLOCK)
         WHERE LineaID = @LineaID;
 
         IF @SKUID IS NULL
             THROW 51010, N'La línea de pedido indicada no existe.', 1;
 
-        SELECT @NombreEstadoActual = NombreEstado FROM dbo.DimEstado WHERE EstadoID = @EstadoActualID;
+        -- Estado real = última fila del historial (fuente de verdad,
+        -- RN-008). NO se lee EstadoActualID: esa copia podía quedar
+        -- obsoleta (ver cabecera, punto 3) y de ahí salían cancelaciones
+        -- decididas sobre un estado que la línea ya no tenía.
+        SELECT TOP (1) @NombreEstadoActual = e.NombreEstado
+        FROM dbo.FactHistorialEstadoLinea h
+        INNER JOIN dbo.DimEstado e ON e.EstadoID = h.EstadoID
+        WHERE h.LineaID = @LineaID
+        ORDER BY h.HistorialID DESC;
 
         -- [DECISIÓN PENDIENTE — ver cabecera del archivo]: no se permite
         -- cancelar voluntariamente una línea Empaquetada hasta que se
@@ -89,14 +114,17 @@ BEGIN
         IF @NombreMotivo = N'voluntaria' AND @NombreEstadoActual = N'Empaquetado'
             THROW 51019, N'[DECISIÓN PENDIENTE] Cancelación voluntaria desde Empaquetado requiere definir el tratamiento del stock ya descontado (RN-009 vs RN-012). No implementado hasta esa decisión.', 1;
 
+        -- Orígenes EXACTOS de la cancelación voluntaria según el contrato
+        -- funcional (la lista no incluye Empaquetado: ese caso lo cubre
+        -- el 51019 de arriba).
         IF @NombreMotivo = N'voluntaria'
-           AND @NombreEstadoActual NOT IN (N'Pedido creado', N'Asignado a picking', N'Picking en proceso', N'Empaquetado')
-            THROW 51013, N'Cancelación voluntaria no permitida en el estado actual de la línea (RN-009).', 1;
+           AND ISNULL(@NombreEstadoActual, N'') NOT IN (N'Pedido creado', N'Asignado a picking', N'Picking en proceso')
+            THROW 51013, N'Cancelación voluntaria no permitida en el estado actual de la línea (RN-009: solo Pedido creado, Asignado a picking o Picking en proceso).', 1;
 
-        IF @NombreMotivo = N'incidencia_picking' AND @NombreEstadoActual <> N'Incidencia de picking'
+        IF @NombreMotivo = N'incidencia_picking' AND ISNULL(@NombreEstadoActual, N'') <> N'Incidencia de picking'
             THROW 51013, N'Cancelación por incidencia solo es válida si la línea está en Incidencia de picking.', 1;
 
-        IF @NombreMotivo = N'vencimiento' AND @NombreEstadoActual <> N'Vencido'
+        IF @NombreMotivo = N'vencimiento' AND ISNULL(@NombreEstadoActual, N'') <> N'Vencido'
             THROW 51013, N'Cancelación por vencimiento solo es válida si la línea está en Vencido.', 1;
 
         SELECT @ReservaActiva = ISNULL(SUM(Cantidad), 0)
@@ -139,11 +167,15 @@ BEGIN
             WHERE IncidenciaID = @IncidenciaID;
         END
 
+        -- Verificación de síntesis: el estado del HISTORIAL ya es Cancelado
+        -- (de ahí salió la validación de origen), así que esta comprobación
+        -- sobre EstadoActualID valida que trg_ActualizarEstadoActual
+        -- sincronizó la copia denormalizada en ESTA misma transacción.
         SELECT @EstadoFinalID = EstadoActualID, @MotivoFinalID = MotivoCancelacionID
         FROM dbo.FactPedidoDetalle WHERE LineaID = @LineaID;
 
         IF @EstadoFinalID <> @EstadoID_Cancelado OR @MotivoFinalID IS NULL
-            THROW 51033, N'Verificación final: la línea no quedó Cancelado con motivo poblado.', 1;
+            THROW 51033, N'Verificación final: EstadoActualID no quedó sincronizado a Cancelado por trg_ActualizarEstadoActual (o el motivo no quedó poblado).', 1;
 
         SET @Resultado = N'CANCELADO';
 

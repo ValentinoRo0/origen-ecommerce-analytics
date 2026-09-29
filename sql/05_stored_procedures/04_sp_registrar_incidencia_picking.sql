@@ -5,6 +5,16 @@ Fase 3 — Implementación SQL Server
 ===============================================================================
 Referencia: RN-003, RN-004, RN-019, RN-020. Sección 6 de 01_procesos_y_reglas.md.
 
+CORRECCIÓN (3ª ronda — cierre del flujo de estados): el estado origen se
+valida ahora de forma ESTRICTA, solo 'Picking en proceso' (transición
+oficial del contrato funcional). Antes se aceptaban también 'Pedido creado'
+y 'Asignado a picking', lo que permitía registrar incidencias sobre líneas
+que aún no habían entrado al picking. El estado real se lee de
+FactHistorialEstadoLinea (fuente de verdad, RN-008), no de la copia
+EstadoActualID. El camino inverso (resolver y retomar el flujo) es
+sp_ResolverIncidencia; el camino de cancelación es sp_CancelarPedido con
+motivo 'incidencia_picking'.
+
 Registra una incidencia detectada durante el picking (producto no
 encontrado, cantidad insuficiente, o dañado — NO recepcion_incompleta, que
 nace de un movimiento, no de una línea de pedido) y mueve la línea al
@@ -44,8 +54,8 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
-    DECLARE @Cantidad INT, @EstadoActualID INT;
-    DECLARE @NombreEstadoActual VARCHAR(40);
+    DECLARE @Cantidad INT;
+    DECLARE @NombreEstadoOrigen VARCHAR(40);
     DECLARE @EstadoID_Incidencia INT;
     DECLARE @AreaAtencionID INT;
     DECLARE @ReservaActiva INT;
@@ -83,8 +93,7 @@ BEGIN
         -- Bloquea la línea antes de validar su estado y su reserva, mismo
         -- criterio que sp_ConfirmarPicking.
         SELECT
-            @Cantidad = Cantidad,
-            @EstadoActualID = EstadoActualID
+            @Cantidad = Cantidad
         FROM dbo.FactPedidoDetalle WITH (UPDLOCK, ROWLOCK, HOLDLOCK)
         WHERE LineaID = @LineaID;
 
@@ -93,11 +102,19 @@ BEGIN
             THROW 51010, N'La línea de pedido indicada no existe.', 1;
         END
 
-        SELECT @NombreEstadoActual = NombreEstado FROM dbo.DimEstado WHERE EstadoID = @EstadoActualID;
+        -- Estado real = última fila del historial (fuente de verdad,
+        -- RN-008), no la copia denormalizada EstadoActualID.
+        SELECT TOP (1) @NombreEstadoOrigen = e.NombreEstado
+        FROM dbo.FactHistorialEstadoLinea h
+        INNER JOIN dbo.DimEstado e ON e.EstadoID = h.EstadoID
+        WHERE h.LineaID = @LineaID
+        ORDER BY h.HistorialID DESC;
 
-        IF @NombreEstadoActual NOT IN (N'Pedido creado', N'Asignado a picking', N'Picking en proceso')
+        -- Origen EXACTO: solo una línea que está en picking puede tener
+        -- incidencia de picking.
+        IF @NombreEstadoOrigen IS NULL OR @NombreEstadoOrigen <> N'Picking en proceso'
         BEGIN
-            THROW 51011, N'La línea no está en un estado válido para registrar una incidencia de picking.', 1;
+            THROW 51011, N'La línea no está en el estado origen de esta operación (debe ser Picking en proceso).', 1;
         END
 
         -- La incidencia solo tiene sentido si existe una reserva activa

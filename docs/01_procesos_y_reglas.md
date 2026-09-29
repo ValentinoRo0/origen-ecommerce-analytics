@@ -52,18 +52,18 @@ Stock insuficiente     Stock reservado con éxito
     ↓                        ↓
 Rechazado              Pedido creado ────────┐
 (fuera del flujo)           ↓                │
-                       Asignado a picking     │  Cancelación voluntaria
-                             ↓                │  disponible en cualquiera
-                       Picking en proceso     │  de estos 4 estados
-                        ↙            ↘        │  (ver sección 3.4)
+                       Asignado a picking     │  Cancelación voluntaria:
+                             ↓                │  permitida en estos 3
+                       Picking en proceso     │  estados, según se
+                        ↙            ↘        │  implementó (ver sección 3.4)
               Producto encontrado   Producto NO encontrado
                     ↓                 o cantidad insuficiente
                Empaquetado ──────────┘             ↓
                     ↓                       Incidencia de picking
           ¿Recojo o despacho?                 ↙            ↘
-              ↙        ↘                 Resuelto        No resuelto
-        Despacho    Disponible          (retoma el          ↓
-             ↓      para recojo          flujo)         Cancelado
+              ↙        ↘                 Resuelto →      No resuelto
+        Despacho    Disponible          Picking en          ↓
+             ↓      para recojo          proceso        Cancelado
         En tránsito       ↓                             (motivo:
              ↓        ¿Cliente recoge                 incidencia_picking)
         Entregado      a tiempo?
@@ -75,11 +75,35 @@ Rechazado              Pedido creado ────────┐
                        ↓    Cancelado
                  Completado (motivo: vencimiento)
                        ↓
-              (post-completado, opcional)
+        (evento posterior a Completado — NO es una
+         transición de estado; se registra en FactDevolucion)
                   Devolución
 ```
 
-**Nota sobre la cancelación voluntaria**: a partir de "Despacho" o "Disponible para recojo", el pedido ya no admite cancelación voluntaria (ver regla RN-009). Por eso esas dos ramas no tienen flecha de salida hacia cancelación voluntaria en el diagrama.
+**Nota sobre la cancelación voluntaria**: en el flujo implementado, la cancelación voluntaria solo se permite desde `Pedido creado`, `Asignado a picking` y `Picking en proceso`; desde `Empaquetado` está bloqueada a la espera de una decisión pendiente (ver sección 3.4). A partir de `En tránsito` o `Disponible para recojo` ya no se admite en absoluto (RN-009), por eso esas dos ramas no tienen flecha de salida hacia cancelación voluntaria en el diagrama.
+
+**Transiciones implementadas (Fase 3)** — cada fila corresponde a un stored procedure que valida el estado origen exacto, produce un único destino y registra la transición en `FactHistorialEstadoLinea`; la copia `FactPedidoDetalle.EstadoActualID` la mantiene al día el trigger `trg_ActualizarEstadoActual`:
+
+| Origen | Destino | Operación (stored procedure) |
+|---|---|---|
+| (reserva fallida al crear) | Rechazado | `sp_CrearPedido` (RN-001) |
+| Pedido creado | Asignado a picking | `sp_AsignarPicking` |
+| Asignado a picking | Picking en proceso | `sp_IniciarPicking` |
+| Picking en proceso | Incidencia de picking | `sp_RegistrarIncidenciaPicking` |
+| Incidencia de picking | Picking en proceso | `sp_ResolverIncidencia` |
+| Incidencia de picking | Cancelado | `sp_CancelarPedido` (motivo `incidencia_picking`) |
+| Picking en proceso | Empaquetado | `sp_ConfirmarPicking` |
+| Empaquetado | En tránsito | `sp_PrepararDespacho` (solo canal `despacho`) |
+| Empaquetado | Disponible para recojo | `sp_PrepararRecojo` (solo canal `recojo`) |
+| En tránsito | Entregado | `sp_RegistrarEntrega` |
+| Entregado | Completado | `sp_CompletarPedido` |
+| Disponible para recojo | Recojo por cliente | `sp_RegistrarRecojo` |
+| Recojo por cliente | Completado | `sp_CompletarPedido` |
+| Disponible para recojo | Vencido | `sp_ProcesarVencimientosRecojo` |
+| Vencido | Cancelado | `sp_CancelarPedido` (motivo `vencimiento`) |
+| Pedido creado / Asignado a picking / Picking en proceso | Cancelado | `sp_CancelarPedido` (motivo `voluntaria`) |
+
+**No hay transición hacia `Devolución`**: no es un estado de la máquina — es un evento posterior a `Completado` que se registra en `FactDevolucion` (`sp_RegistrarDevolucion`, RN-007) sin modificar el estado de la línea.
 
 ### 3.2. Estados del pedido
 
@@ -98,7 +122,7 @@ Rechazado              Pedido creado ────────┐
 | Recojo por cliente | Cliente recogió en tienda | No |
 | Completado | Ciclo cerrado exitosamente | **Sí** |
 | Cancelado | Pedido no pudo completarse (ver motivos, sección 2.3) | **Sí** |
-| Devolución | Cliente devuelve un pedido ya completado | Sí (evento aparte, solo KPI) |
+| Devolución | Cliente devuelve un pedido ya completado — **evento** posterior a `Completado`, no una transición (ningún procedimiento cambia el estado a Devolución) | No aplica — fuera de la máquina de estados (la fila existe en `DimEstado` por integridad) |
 
 ### 3.3. Reglas de negocio — flujo principal
 
@@ -106,7 +130,7 @@ Rechazado              Pedido creado ────────┐
 La reserva de stock debe realizarse inmediatamente después de la confirmación del pago. Si no existe stock suficiente, el pedido no debe ingresar al flujo operativo principal (pasa a Rechazado).
 
 **RN-002 — Reserva atómica**
-La verificación y reserva de stock deben ejecutarse como una operación atómica, para evitar que dos pedidos reserven simultáneamente la misma unidad disponible. *(Implementación prevista en Fase 3: transacción + TRY/CATCH.)*
+La verificación y reserva de stock deben ejecutarse como una operación atómica, para evitar que dos pedidos reserven simultáneamente la misma unidad disponible. *(Implementado en Fase 3 en `sp_CrearPedido`: transacción + `TRY/CATCH` con `XACT_ABORT`.)*
 
 **RN-003 — Incidencia de picking**
 Si durante el picking el producto no puede ser encontrado o la cantidad disponible es inferior a la reservada, debe registrarse una incidencia con su motivo (`no_encontrado`, `cantidad_insuficiente`, `dañado`, u otro).
@@ -124,7 +148,7 @@ Un pedido disponible para recojo se considera vencido cuando supera el plazo def
 Una devolución solo puede registrarse sobre un pedido que haya alcanzado previamente el estado Completado.
 
 **RN-008 — Registro de eventos por transición**
-Cada transición de estado debe registrar un timestamp propio, no solo el estado actual del pedido. Esto es indispensable para calcular tiempos de picking, cumplimiento de SLA, y la brecha cancelación–notificación. Implica modelar un **historial de estados**, no solo el estado vigente (a resolver formalmente en Fase 2).
+Cada transición de estado debe registrar un timestamp propio, no solo el estado actual del pedido. Esto es indispensable para calcular tiempos de picking, cumplimiento de SLA, y la brecha cancelación–notificación. Implica modelar un **historial de estados**, no solo el estado vigente *(resuelto en Fase 2 con `FactHistorialEstadoLinea`; el evento de notificación al cliente de la brecha sigue sin modelar — ver RN-005)*.
 
 ### 3.4. Cancelación voluntaria del cliente
 
@@ -137,6 +161,9 @@ Cuando ocurre una cancelación voluntaria:
 - **No** dispara la matriz de resolución de incidencias — no es una falla operativa, no requiere que un área "actúe" para corregir algo.
 
 Esta distinción es la razón por la que se separó `motivo_cancelacion` como campo obligatorio desde el diseño (sección 2.3): sin ella, la tasa de cancelación total mezclaría decisiones del cliente con fallas propias de Origen, y el análisis de causas (pregunta de negocio central del proyecto) perdería precisión.
+
+> **Estado implementado (Fase 3) — contradicción pendiente de decisión.**
+> `sp_CancelarPedido` admite cancelación voluntaria únicamente desde `Pedido creado`, `Asignado a picking` y `Picking en proceso` (en cualquier otro estado devuelve el error `51013`). Desde `Empaquetado` devuelve un error explícito (`51019`) que marca la decisión como pendiente: en ese estado el picking ya convirtió la reserva en descuento definitivo (RN-011), por lo que no queda reserva que liberar según RN-012 y cancelar obligaría a definir cómo reingresar el stock ya descontado — **RN-009 y RN-012 se contradicen aquí y no se ha elegido ninguna salida**. Pendiente de decisión: ajustar RN-009 (retirar `Empaquetado` de la lista), definir el reingreso de stock al cancelar con descuento ya aplicado, o mantener el bloqueo. El resto de la regla sí está implementado: motivo `voluntaria` obligatorio y liberación de la reserva cuando aún existe (RN-012).
 
 ---
 
@@ -201,7 +228,7 @@ Todo movimiento de stock debe registrarse como un evento individual con tipo, ca
 La diferencia entre stock sistema y stock físico se detecta mediante conteos periódicos, que generan un movimiento de tipo "ajuste" con motivo `conteo_fisico`. Origen no asume que el stock físico se conoce en tiempo real — se conoce solo en el momento del conteo, lo cual es realista y es, en sí mismo, parte del problema que el proyecto investiga.
 
 **RN-015 — No negatividad**
-El stock sistema no puede quedar en un valor negativo tras ningún movimiento. *(Implementación prevista en Fase 3: constraint CHECK o validación dentro de la transacción de descuento.)*
+El stock sistema no puede quedar en un valor negativo tras ningún movimiento. *(Implementado con `CHECK CK_StockSKUTienda_StockNoNegativo` en `02_tables/09_stock_sku_tienda.sql`, reforzado por `CK_StockSKUTienda_ReservadoNoExcedeSistema` — nunca se reserva más de lo que existe.)*
 
 ### 4.5. Nota sobre granularidad (referencia cruzada)
 

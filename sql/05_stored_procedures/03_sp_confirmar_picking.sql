@@ -5,6 +5,14 @@ Fase 3 — Implementación SQL Server
 ===============================================================================
 Referencia: RN-011.
 
+CORRECCIÓN (3ª ronda — cierre del flujo de estados): el estado origen se
+valida ahora de forma ESTRICTA, solo 'Picking en proceso' (transición
+oficial del contrato funcional: antes deben ejecutarse sp_AsignarPicking y
+sp_IniciarPicking). Antes se aceptaban también 'Pedido creado' y 'Asignado
+a picking', lo que permitía saltos ambiguos del flujo. El estado real se
+lee de FactHistorialEstadoLinea (fuente de verdad, RN-008), no de la copia
+denormalizada EstadoActualID.
+
 VERSIÓN CORREGIDA tras revisión, con 2 cambios respecto a la primera versión:
 
 1. "Reserva activa" ahora se calcula como la SUMA NETA de los tres tipos de
@@ -42,8 +50,8 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
-    DECLARE @SKUID INT, @TiendaID INT, @Cantidad INT, @EstadoActualID INT;
-    DECLARE @NombreEstadoActual VARCHAR(40);
+    DECLARE @SKUID INT, @TiendaID INT, @Cantidad INT;
+    DECLARE @NombreEstadoOrigen VARCHAR(40);
     DECLARE @EstadoID_Empaquetado INT;
     DECLARE @ReservaActiva INT;
 
@@ -62,8 +70,7 @@ BEGIN
         SELECT
             @SKUID = SKUID,
             @TiendaID = TiendaID,
-            @Cantidad = Cantidad,
-            @EstadoActualID = EstadoActualID
+            @Cantidad = Cantidad
         FROM dbo.FactPedidoDetalle WITH (UPDLOCK, ROWLOCK, HOLDLOCK)
         WHERE LineaID = @LineaID;
 
@@ -72,11 +79,19 @@ BEGIN
             THROW 51010, N'La línea de pedido indicada no existe.', 1;
         END
 
-        SELECT @NombreEstadoActual = NombreEstado FROM dbo.DimEstado WHERE EstadoID = @EstadoActualID;
+        -- Estado real = última fila del historial (fuente de verdad,
+        -- RN-008), no la copia denormalizada EstadoActualID.
+        SELECT TOP (1) @NombreEstadoOrigen = e.NombreEstado
+        FROM dbo.FactHistorialEstadoLinea h
+        INNER JOIN dbo.DimEstado e ON e.EstadoID = h.EstadoID
+        WHERE h.LineaID = @LineaID
+        ORDER BY h.HistorialID DESC;
 
-        IF @NombreEstadoActual NOT IN (N'Pedido creado', N'Asignado a picking', N'Picking en proceso')
+        -- Origen EXACTO: sin lista amplia, para que no haya forma de
+        -- "saltarse" Asignar/Iniciar picking y llegar aquí.
+        IF @NombreEstadoOrigen IS NULL OR @NombreEstadoOrigen <> N'Picking en proceso'
         BEGIN
-            THROW 51011, N'La línea no está en un estado válido para confirmar picking (debe estar Pedido creado, Asignado a picking o Picking en proceso).', 1;
+            THROW 51011, N'La línea no está en el estado origen de esta operación (debe ser Picking en proceso: primero Asignar picking y luego Iniciar picking).', 1;
         END
 
         -- Reserva activa neta: RESERVA + LIBERACION_RESERVA + DESCUENTO_DEFINITIVO.

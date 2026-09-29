@@ -39,6 +39,16 @@ un único script de una sola conexión — queda como prueba manual: abrir
 dos pestañas de SSMS, cada una con una llamada a sp_CancelarPedido sobre
 la misma línea, ejecutar simultáneamente, y confirmar que solo una tiene
 éxito y la otra recibe 51013.
+
+CORRECCIÓN (3ª ronda — cierre del flujo de estados): la relectura de
+estado dentro de la Parte 1 (la que decide si la línea pasa a Vencido) se
+hace ahora desde FactHistorialEstadoLinea (fuente de verdad, RN-008), no
+desde la copia EstadoActualID — mismo criterio que el resto de SP de
+transición, y tomando el bloqueo de la línea ANTES de leer el historial.
+Los barridos de candidatos de las Partes 1 y 2 SÍ siguen usando
+EstadoActualID: para eso existe la copia denormalizada (evita recorrer el
+historial en cada barrido) y trg_ActualizarEstadoActual la mantiene fresca
+— sin ese trigger las Partes 1 y 2 no encontraban ninguna candidata.
 ===============================================================================
 */
 
@@ -102,9 +112,19 @@ BEGIN
         BEGIN TRY
             BEGIN TRANSACTION;
 
-            SELECT @EstadoActualLinea = EstadoActualID
-            FROM dbo.FactPedidoDetalle WITH (UPDLOCK, ROWLOCK, HOLDLOCK)
-            WHERE LineaID = @LineaID;
+            -- Bloquea la fila de la línea (serialización contra otros SP,
+            -- mismo criterio que sp_CancelarPedido) y DESPUÉS lee el estado
+            -- real desde el historial (fuente de verdad, RN-008), no desde
+            -- la copia denormalizada EstadoActualID.
+            SET @EstadoActualLinea = NULL;
+            IF EXISTS (
+                SELECT 1 FROM dbo.FactPedidoDetalle WITH (UPDLOCK, ROWLOCK, HOLDLOCK)
+                WHERE LineaID = @LineaID
+            )
+                SELECT TOP (1) @EstadoActualLinea = EstadoID
+                FROM dbo.FactHistorialEstadoLinea
+                WHERE LineaID = @LineaID
+                ORDER BY HistorialID DESC;
 
             IF @EstadoActualLinea = @EstadoID_DisponibleRecojo
             BEGIN

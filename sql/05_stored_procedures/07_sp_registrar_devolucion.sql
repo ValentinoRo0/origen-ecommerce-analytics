@@ -18,6 +18,15 @@ regla nueva que debe definirse antes de implementarla (no se decide aquí).
 Salvaguarda adicional (no es una RN nueva, es integridad operativa del
 mismo tipo que ya se usa en otros SP): no se permite más de una devolución
 por línea.
+
+CORRECCIÓN (3ª ronda — cierre del flujo de estados): la validación de que
+la línea está 'Completado' se lee ahora de FactHistorialEstadoLinea
+(última fila, fuente de verdad, RN-008) en vez de la copia EstadoActualID.
+Este procedimiento sigue siendo SOLO un evento: nunca inserta en
+FactHistorialEstadoLinea ni cambia EstadoActualID — el estado 'Devolución'
+de DimEstado queda deliberadamente fuera del flujo operativo (no se usa
+como origen ni destino de ninguna transición; la devolución ocurre después
+de Completado y el ciclo ya está cerrado).
 ===============================================================================
 */
 
@@ -42,6 +51,7 @@ BEGIN
 
     DECLARE @TipoMotivoEncontrado VARCHAR(20);
     DECLARE @EstadoID_Completado INT;
+    DECLARE @EstadoID_Linea INT;
     DECLARE @FechaCompletado DATETIME2(0);
 
     SELECT @TipoMotivoEncontrado = TipoMotivo FROM dbo.DimMotivo WHERE MotivoID = @MotivoID;
@@ -61,11 +71,15 @@ BEGIN
         )
             THROW 51010, N'La línea de pedido indicada no existe.', 1;
 
-        IF NOT EXISTS (
-            SELECT 1 FROM dbo.FactPedidoDetalle fp
-            INNER JOIN dbo.DimEstado e ON e.EstadoID = fp.EstadoActualID
-            WHERE fp.LineaID = @LineaID AND e.NombreEstado = N'Completado'
-        )
+        -- Estado real = última fila del historial (fuente de verdad,
+        -- RN-008), no la copia denormalizada EstadoActualID. El bloqueo
+        -- de la línea ya se tomó en la comprobación de existencia anterior.
+        SELECT TOP (1) @EstadoID_Linea = EstadoID
+        FROM dbo.FactHistorialEstadoLinea
+        WHERE LineaID = @LineaID
+        ORDER BY HistorialID DESC;
+
+        IF ISNULL(@EstadoID_Linea, -1) <> @EstadoID_Completado
             THROW 51016, N'Solo se puede registrar una devolución sobre una línea en estado Completado (RN-026).', 1;
 
         SELECT @FechaCompletado = MAX(FechaHora)

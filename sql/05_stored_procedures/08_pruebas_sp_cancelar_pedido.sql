@@ -5,7 +5,11 @@ Fase 3 — Implementación SQL Server
 ===============================================================================
 Casos 1-5: igual que la versión anterior (voluntaria exitosa, doble
 cancelación, motivo incorrecto, incidencia_picking exitosa, IncidenciaID
-incorrecto).
+incorrecto). CORRECCIÓN de la 3ª ronda: los casos 4 y 6 ahora navegan la
+máquina de estados completa (sp_AsignarPicking + sp_IniciarPicking) antes
+de llegar al estado que prueban — los orígenes de sp_RegistrarIncidenciaPicking
+y sp_ConfirmarPicking son ahora exactos ('Picking en proceso') y ya no
+aceptan saltos desde 'Pedido creado'.
 
 NUEVOS:
 6. Cancelación voluntaria desde Empaquetado → debe fallar con el error
@@ -13,6 +17,10 @@ NUEVOS:
 7. Reserva activa distinta de Cantidad (inconsistencia simulada
    insertando manualmente una LIBERACION_RESERVA parcial) → debe
    rechazarse, no liberar parcialmente.
+
+Con la corrección del trigger trg_ActualizarEstadoActual, los Casos 1, 2,
+4, 6 y 7 pasan a comportarse según diseño (antes fallaban con 51033 por
+EstadoActualID obsoleto o se saltaban estados).
 ===============================================================================
 */
 
@@ -43,6 +51,10 @@ SET @FechaID = 20260103;
 
 IF NOT EXISTS (SELECT 1 FROM dbo.DimEstado WHERE NombreEstado = N'Pedido creado')
     INSERT INTO dbo.DimEstado (NombreEstado, EsFinal) VALUES (N'Pedido creado', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.DimEstado WHERE NombreEstado = N'Asignado a picking')
+    INSERT INTO dbo.DimEstado (NombreEstado, EsFinal) VALUES (N'Asignado a picking', 0);
+IF NOT EXISTS (SELECT 1 FROM dbo.DimEstado WHERE NombreEstado = N'Picking en proceso')
+    INSERT INTO dbo.DimEstado (NombreEstado, EsFinal) VALUES (N'Picking en proceso', 0);
 IF NOT EXISTS (SELECT 1 FROM dbo.DimEstado WHERE NombreEstado = N'Incidencia de picking')
     INSERT INTO dbo.DimEstado (NombreEstado, EsFinal) VALUES (N'Incidencia de picking', 0);
 IF NOT EXISTS (SELECT 1 FROM dbo.DimEstado WHERE NombreEstado = N'Empaquetado')
@@ -97,6 +109,10 @@ BEGIN CATCH PRINT N'[OK]     Caso 3 — Rechazado correctamente: ' + ERROR_MESSA
 
 -- CASO 4: Cancelación por incidencia_picking
 BEGIN TRY
+    -- La máquina de estados exige llegar a 'Picking en proceso' antes de
+    -- poder registrar una incidencia (origen exacto de la operación).
+    EXEC dbo.sp_AsignarPicking @LineaID=@LineaID2, @FechaID=@FechaID, @Resultado=@Resultado OUTPUT;
+    EXEC dbo.sp_IniciarPicking @LineaID=@LineaID2, @FechaID=@FechaID, @Resultado=@Resultado OUTPUT;
     EXEC dbo.sp_RegistrarIncidenciaPicking @LineaID=@LineaID2, @TipoIncidencia=N'no_encontrado',
         @MotivoID=@MotivoNoEncontradoID, @FechaID=@FechaID, @IncidenciaID=@IncidenciaID OUTPUT;
     EXEC dbo.sp_CancelarPedido @LineaID=@LineaID2, @MotivoID=@MotivoIncidenciaPickingID, @FechaID=@FechaID,
@@ -118,6 +134,10 @@ BEGIN CATCH PRINT N'[OK]     Caso 5 — Rechazado correctamente: ' + ERROR_MESSA
 -- CASO 6 (NUEVO): Cancelación voluntaria desde Empaquetado → DECISIÓN PENDIENTE
 EXEC dbo.sp_CrearPedido @PedidoID=910003, @ClienteID=@ClienteID, @SKUID=@SKUID, @TiendaID=@TiendaID,
     @FechaID=@FechaID, @Canal=N'recojo', @Cantidad=1, @LineaID=@LineaID3 OUTPUT, @Resultado=@Resultado OUTPUT;
+-- Recorrido completo hasta Empaquetado: los orígenes de Asignar/Iniciar/
+-- Confirmar picking son ahora exactos (sin saltos de estado).
+EXEC dbo.sp_AsignarPicking @LineaID=@LineaID3, @FechaID=@FechaID, @Resultado=@Resultado OUTPUT;
+EXEC dbo.sp_IniciarPicking @LineaID=@LineaID3, @FechaID=@FechaID, @Resultado=@Resultado OUTPUT;
 EXEC dbo.sp_ConfirmarPicking @LineaID=@LineaID3, @FechaID=@FechaID, @Resultado=@Resultado OUTPUT;
 BEGIN TRY
     EXEC dbo.sp_CancelarPedido @LineaID=@LineaID3, @MotivoID=@MotivoVoluntariaID, @FechaID=@FechaID,

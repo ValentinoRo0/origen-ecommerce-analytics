@@ -99,7 +99,7 @@ Origen es un retailer ficticio de moda y lifestyle (ropa, calzado, accesorios, p
 
 Las herramientas adicionales se incorporarán únicamente cuando una necesidad concreta del proyecto las justifique.
 
-## 🔄 Arquitectura prevista
+## 🔄 Arquitectura
 
 ```
 Datos simulados → SQL Server → Views/consultas analíticas
@@ -107,7 +107,9 @@ Datos simulados → SQL Server → Views/consultas analíticas
      → Hallazgos y recomendaciones
 ```
 
-La arquitectura se irá refinando durante las siguientes fases.
+La capa SQL Server ya incluye el **flujo de estados del pedido** implementado con stored procedures: 14 procedimientos cubren la creación de pedidos, el flujo operativo completo (asignación a picking, picking, incidencias, empacado, despacho/recojo, entrega, vencimiento), cancelaciones y devoluciones. Cada transición valida su estado origen exacto y queda registrada en `FactHistorialEstadoLinea`, la fuente de verdad del estado; `FactPedidoDetalle.EstadoActualID` se mantiene como copia sincronizada automáticamente por el trigger `trg_ActualizarEstadoActual`. Un segundo trigger mantiene actualizado el stock por SKU/tienda.
+
+La arquitectura se irá refinando durante las siguientes fases (views analíticas, ETL y modelo de Power BI).
 
 ## 📂 Estructura del proyecto
 
@@ -183,8 +185,9 @@ No todos los directorios necesitan existir desde el inicio; se completan a medid
 - [x] Devoluciones
 - [x] Reglas de negocio consolidadas
 - [x] Modelo de datos (dimensiones, hechos, relaciones)
-- [ ] Implementación SQL
-- [ ] Implementación SQL
+- [x] Base de datos: tablas, restricciones y datos semilla
+- [x] Flujo de estados del pedido (stored procedures + trigger de sincronización)
+- [ ] Views analíticas (resto de la Fase 3)
 - [ ] ETL
 - [ ] Análisis Python
 - [ ] KPIs

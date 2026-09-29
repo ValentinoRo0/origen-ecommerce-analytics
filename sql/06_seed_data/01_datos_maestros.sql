@@ -45,6 +45,14 @@ IF NOT EXISTS (SELECT 1 FROM dbo.DimEstado WHERE NombreEstado = N'Completado')
     INSERT INTO dbo.DimEstado (NombreEstado, EsFinal) VALUES (N'Completado', 1);
 IF NOT EXISTS (SELECT 1 FROM dbo.DimEstado WHERE NombreEstado = N'Cancelado')
     INSERT INTO dbo.DimEstado (NombreEstado, EsFinal) VALUES (N'Cancelado', 1);
+
+-- 'Devolución' NO es un estado del flujo operativo: es un EVENTO posterior
+-- a Completado (se registra en FactDevolucion vía sp_RegistrarDevolucion,
+-- que jamás cambia EstadoActualID ni inserta en FactHistorialEstadoLinea).
+-- El registro se conserva aquí solo por integridad referencial y por
+-- mantener el catálogo completo de 14 estados — ningún procedimiento lo
+-- usa como origen ni destino de una transición (decisión de diseño de la
+-- máquina de estados de Origen: la devolución queda fuera del flujo).
 IF NOT EXISTS (SELECT 1 FROM dbo.DimEstado WHERE NombreEstado = N'Devolución')
     INSERT INTO dbo.DimEstado (NombreEstado, EsFinal) VALUES (N'Devolución', 1);
 

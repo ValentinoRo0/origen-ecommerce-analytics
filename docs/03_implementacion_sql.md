@@ -1,5 +1,5 @@
 # ORIGEN — Implementación SQL Server
-## Fase 3 🟡 En progreso — Parte 1: Base de datos, dimensiones y hechos
+## Fase 3 🟡 En progreso — Base de datos, dimensiones, hechos y flujo de estados
 
 ---
 
@@ -58,7 +58,7 @@ Es la tabla con más restricciones del modelo, porque sostiene directamente RN-0
 - `CK_MovInventario_SignoCantidad`: el signo de `Cantidad` depende de qué contador afecta cada tipo de movimiento (tabla de RN-013 en Fase 1, sección 4.3) — `RESERVA`/`LIBERACION_RESERVA` solo afectan al stock reservado, nunca al stock sistema, así que su signo no sigue la lógica genérica de "ingreso/salida física".
 - Índice compuesto `(SKUID, TiendaID)`: el cálculo de stock disponible siempre filtra por ambos a la vez.
 
-**Deliberadamente fuera de los `CHECK`**: que `LineaID` esté poblado solo para `RESERVA`/`LIBERACION_RESERVA`/`DESCUENTO_DEFINITIVO` — se resuelve con lógica procedural (sección 6), no con un constraint declarativo, para no mezclar dos dimensiones de validación distintas (recepción vs. tipo de movimiento) en un mismo `CHECK`.
+**Fuera de los `CHECK`**: las reglas que comparan contra **otra tabla** — que `MotivoCancelacionID` sea de tipo `cancelacion`, que `EstadoActualID` refleje el historial, que la devolución sea sobre una línea `Completada` — se resuelven en la capa procedural/trigger (sección 5). En cambio, la regla de `LineaID` según `TipoMovimiento` SÍ es un `CHECK` (`CK_MovInventario_LineaSegunTipo`, `03_constraints/01_movimiento_linea_segun_tipo.sql`): ambos campos viven en la misma fila, como se detalla en la corrección registrada en ese archivo.
 
 ### 4.4. `FactIncidencia`
 
@@ -76,22 +76,50 @@ Es la tabla con menos `CHECK` de las 5, porque sus dos reglas más importantes (
 
 ---
 
-## 5. Reglas que NO se implementaron como `CHECK` (y por qué)
+## 5. Reglas que NO se implementaron como `CHECK` (y dónde quedaron resueltas)
 
-Un `CHECK` en SQL Server solo puede validar columnas de la **misma fila**. Toda regla que necesita comparar contra otra tabla queda pendiente para la siguiente parte de esta fase (stored procedures, triggers o lógica transaccional):
+Un `CHECK` en SQL Server solo puede validar columnas de la **misma fila**. Estas reglas comparan contra otra tabla y se resuelven en la capa procedural/trigger, ya construida en esta fase:
 
-| Regla | Por qué no es un `CHECK` | Dónde se resuelve |
+| Regla | Por qué no es un `CHECK` | Dónde se resuelve (implementado) |
 |---|---|---|
-| `MotivoCancelacionID` debe tener `TipoMotivo = 'cancelacion'` en `DimMotivo` | Compara contra otra tabla | Procedimiento/trigger de cancelación |
-| `EstadoActualID` en `FactPedidoDetalle` debe reflejar la última fila de `FactHistorialEstadoLinea` | Compara contra otra tabla | Trigger o procedimiento al insertar en el historial |
-| `LineaID` en `FactMovimientoInventario` poblado solo para ciertos `TipoMovimiento` | Aunque es la misma tabla, se decidió no mezclarlo con el `CHECK` de recepción por claridad | Procedimiento de inserción de movimientos |
-| La línea de `FactDevolucion` debe estar en estado `Completado` (RN-026) | El estado vive en otra tabla | Procedimiento de registro de devolución |
-| `FechaDevolucion` dentro de la ventana de devolución (RN-027) | La fecha de completado vive en `FactHistorialEstadoLinea` | Procedimiento de registro de devolución |
+| `MotivoCancelacionID` debe tener `TipoMotivo = 'cancelacion'` en `DimMotivo` | Compara contra otra tabla | `sp_CancelarPedido` — validación previa, error 51030 |
+| `EstadoActualID` en `FactPedidoDetalle` debe reflejar la última fila de `FactHistorialEstadoLinea` | Compara contra otra tabla | `trg_ActualizarEstadoActual` (sección 6.1) |
+| La línea de `FactDevolucion` debe estar en estado `Completado` (RN-026) | El estado vive en otra tabla | `sp_RegistrarDevolucion` — error 51016, leyendo el historial |
+| `FechaDevolucion` dentro de la ventana de devolución (RN-027) | La fecha de completado vive en `FactHistorialEstadoLinea` | `sp_RegistrarDevolucion` — error 51017 |
 
-Ninguna de estas reglas se pierde — quedan documentadas aquí para no olvidarlas al construir la sección 6.
+La cuarta regla que esta tabla listaba originalmente (`LineaID` poblado solo para ciertos `TipoMovimiento`) **sí** terminó como `CHECK` — `CK_MovInventario_LineaSegunTipo` en `03_constraints/01_movimiento_linea_segun_tipo.sql` — y se retiró de esta lista por esa razón.
 
 ---
 
-## 6. Siguiente paso
+## 6. Implementación transaccional
 
-Con las 8 dimensiones y 5 tablas de hechos creadas, sigue: constraints cruzados vía trigger/procedimiento (tabla de la sección 5), la sincronización de `EstadoActualID`, las transacciones críticas (reserva atómica RN-002, descuento definitivo), y finalmente las views de consumo analítico. Se documentan en la Parte 2 de este archivo cuando se construyan.
+### 6.1. Sincronización de `EstadoActualID` — `dbo.trg_ActualizarEstadoActual`
+
+`sql/04_triggers/04_actualizar_estado_actual.sql`. Trigger `AFTER INSERT` sobre `FactHistorialEstadoLinea`: por cada inserción en el historial, actualiza `FactPedidoDetalle.EstadoActualID` con el estado insertado para esa línea.
+
+Su responsabilidad es exactamente esa — y solo esa: **mantener la copia denormalizada al día**. Los stored procedures nunca escriben `EstadoActualID` a mano; validan la transición contra la última fila del historial (la fuente de verdad) y registran el cambio allí, y el trigger propaga el resultado a la copia. Así la sincronización vive en un solo punto en lugar de duplicarse en cada procedimiento.
+
+Decisiones de diseño: agrupa las filas `inserted` por `LineaID` (soporta inserciones multi-fila en una sola sentencia); el estado nuevo se toma por orden de inserción (`HistorialID`), **no** por `MAX(FechaHora)`, para no degradar registros con fechas históricas; se ejecuta dentro de la transacción del procedimiento que hizo el INSERT (si ese hace ROLLBACK, el UPDATE se revierte con él); no hay recursividad porque solo actualiza `FactPedidoDetalle`.
+
+### 6.2. Stored procedures del flujo de estados
+
+Cada procedimiento valida un **estado origen exacto** (leído de `FactHistorialEstadoLinea` dentro del bloqueo de la línea) y produce **un solo destino** registrado en el historial — no hay tabla genérica de transiciones ni framework de workflow. Sobre los procedimientos ya existentes (`sp_CrearPedido`, `sp_ConfirmarPicking`, `sp_RegistrarIncidenciaPicking`, `sp_CancelarPedido`, `sp_ProcesarVencimientosRecojo`, `sp_RegistrarDevolucion`), la máquina de estados se completó con:
+
+| Procedimiento | Transición |
+|---|---|
+| `sp_AsignarPicking` | Pedido creado → Asignado a picking |
+| `sp_IniciarPicking` | Asignado a picking → Picking en proceso |
+| `sp_ResolverIncidencia` | Incidencia de picking → Picking en proceso |
+| `sp_PrepararDespacho` | Empaquetado → En tránsito (solo canal `despacho`) |
+| `sp_RegistrarEntrega` | En tránsito → Entregado |
+| `sp_PrepararRecojo` | Empaquetado → Disponible para recojo (solo canal `recojo`) |
+| `sp_RegistrarRecojo` | Disponible para recojo → Recojo por cliente |
+| `sp_CompletarPedido` | Entregado \| Recojo por cliente → Completado |
+
+El fork desde `Empaquetado` es el único punto donde el canal se valida explícitamente (error 51041): a partir de ahí, cada operación queda determinada por su estado origen. La devolución es un evento posterior a `Completado` (`FactDevolucion`) y no participa en la máquina de estados. El flujo completo y los errores de validación están en `01_procesos_y_reglas.md` (sección 3) y en las cabeceras de cada script.
+
+---
+
+## 7. Siguiente paso
+
+Con el flujo de estados cerrado y probado (scripts `08`, `09` y `18` de `05_stored_procedures/`), sigue la capa de **views de consumo analítico** (`06_views/`) que alimentarán los KPIs y el modelo de Power BI.

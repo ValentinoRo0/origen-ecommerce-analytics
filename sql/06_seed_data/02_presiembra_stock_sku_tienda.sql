@@ -141,7 +141,7 @@ DECLARE @V TABLE
     Nro        INT           NOT NULL,
     Validacion NVARCHAR(70)  NOT NULL,
     Esperado   NVARCHAR(60)  NOT NULL,
-    Obtenido   NVARCHAR(60)  NOT NULL,
+    Obtenido   NVARCHAR(120) NOT NULL,
     Resultado  VARCHAR(5)    NOT NULL
 );
 
@@ -221,36 +221,147 @@ INSERT INTO @V VALUES
     (5, N'Coherencia ledger vs StockSKUTienda', N'0 discrepancias', CAST(@n AS NVARCHAR(60)),
         CASE WHEN @n = 0 THEN 'OK' ELSE 'FALLA' END);
 
--- ---- V6: disponibilidad esperada -------------------------------------------
--- Disponible = Sistema - Reservado (RN-010). Antes de simular pedidos deben
--- existir exactamente 5 filas con stock (total 20 u.) y las 51 restantes en 0.
-DECLARE @Esp TABLE (CodigoSKU NVARCHAR(10), NombreTienda NVARCHAR(100), Disp INT);
-INSERT INTO @Esp VALUES
+-- ---- V6: disponibilidad por invariantes (no por snapshot) -------------------
+-- DOS capas conceptuales:
+--
+-- Capa A - Integridad de la siembra inicial (diseno aprobado, NO el saldo):
+--   exige en FactMovimientoInventario exactamente los 5 movimientos
+--   aprobados INGRESO / CONFIGURACION_INICIAL (FechaID 20260101, LineaID
+--   NULL), exactamente uno por combinacion, con cantidades 10/4/3/1/2 =
+--   20 unidades sembradas, sin duplicados y sin movimientos
+--   CONFIGURACION_INICIAL fuera de esas 5 combinaciones.
+--
+-- Capa B - Disponibilidad operativa actual (derivada del ledger):
+--   recalcula StockSistema/StockReservado por SKU x Tienda con las reglas
+--   RN-013 (las mismas de vw_StockHistorico y trg_ActualizarStockSKUTienda):
+--     StockSistema   <- INGRESO, AJUSTE, DESCUENTO_DEFINITIVO
+--     StockReservado <- RESERVA, LIBERACION_RESERVA, DESCUENTO_DEFINITIVO
+--   (con el signo ya almacenado en Cantidad) y lo compara contra
+--   StockSKUTienda. Exige ademas: cobertura de las 56 combinaciones,
+--   StockReservado <= StockSistema, Disponible = Sistema - Reservado >= 0
+--   (RN-010) y sin stock negativo (RN-015).
+--
+-- NO exige 5 filas con stock ni 20/18 unidades disponibles: son snapshots
+-- operativos variables. Siembra aprobada = 5 combinaciones / 20 unidades;
+-- el saldo actual derivado de los movimientos operativos de Fase 3 se
+-- muestra como valor observado (informativo), sin fijarlo como expectativa.
+DECLARE @Sembrado TABLE (CodigoSKU NVARCHAR(10), NombreTienda NVARCHAR(100), Cantidad INT NOT NULL);
+INSERT INTO @Sembrado VALUES
     (N'A10001', N'Jockey Plaza',           10),
     (N'A10001', N'Real Plaza Arequipa',     4),
     (N'A30001', N'Real Plaza Arequipa',     3),
     (N'A30002', N'Real Plaza Arequipa',     1),
     (N'A40001', N'Mall Aventura Trujillo',  2);
 
-DECLARE @Desvios INT, @ConStock INT, @TotalDisp INT;
+-- Capa A: la siembra aprobada existe en el ledger --------------------------------
+DECLARE @CombOk INT, @ConfTotal INT, @ConfFuera INT, @UnidSembradas INT;
 
-SELECT @Desvios = COUNT(*)
+-- Cada una de las 5 combinaciones debe tener EXACTAMENTE 1 movimiento con las
+-- condiciones aprobadas y su cantidad aprobada (una combinacion ausente,
+-- mal condicionada, con cantidad distinta o duplicada resta 1 a @CombOk).
+SELECT @CombOk = COUNT(*)
+FROM (
+    SELECT sk.CodigoSKU, t.NombreTienda, e.Cantidad AS Cant,
+           COUNT(m.MovimientoID) AS N, ISNULL(SUM(m.Cantidad), 0) AS Q
+    FROM @Sembrado e
+    INNER JOIN dbo.DimSKU    sk ON sk.CodigoSKU   = e.CodigoSKU
+    INNER JOIN dbo.DimTienda t  ON t.NombreTienda = e.NombreTienda
+    LEFT  JOIN dbo.FactMovimientoInventario m
+           ON m.SKUID          = sk.SKUID
+          AND m.TiendaID       = t.TiendaID
+          AND m.TipoMovimiento = N'INGRESO'
+          AND m.Origen         = N'CONFIGURACION_INICIAL'
+          AND m.FechaID        = 20260101
+          AND m.LineaID        IS NULL
+    GROUP BY sk.CodigoSKU, t.NombreTienda, e.Cantidad
+) c
+WHERE c.N = 1 AND c.Q = c.Cant;
+
+-- Total de movimientos CONFIGURACION_INICIAL (de cualquier forma): debe ser 5.
+-- Cubre duplicados y movimientos de configuracion con otra fecha/tipo/linea.
+SELECT @ConfTotal = COUNT(*)
+FROM dbo.FactMovimientoInventario
+WHERE Origen = N'CONFIGURACION_INICIAL';
+
+-- Ningun CONFIGURACION_INICIAL fuera de las 5 combinaciones aprobadas.
+SELECT @ConfFuera = COUNT(*)
+FROM dbo.FactMovimientoInventario m
+WHERE m.Origen = N'CONFIGURACION_INICIAL'
+  AND NOT EXISTS (
+        SELECT 1
+        FROM @Sembrado e
+        INNER JOIN dbo.DimSKU    sk ON sk.CodigoSKU   = e.CodigoSKU
+        INNER JOIN dbo.DimTienda t  ON t.NombreTienda = e.NombreTienda
+        WHERE sk.SKUID = m.SKUID AND t.TiendaID = m.TiendaID);
+
+-- Unidades sembradas bajo las condiciones aprobadas: debe ser 20.
+SELECT @UnidSembradas = ISNULL(SUM(m.Cantidad), 0)
+FROM dbo.FactMovimientoInventario m
+INNER JOIN dbo.DimSKU    sk ON sk.SKUID   = m.SKUID
+INNER JOIN dbo.DimTienda t  ON t.TiendaID = m.TiendaID
+INNER JOIN @Sembrado e ON e.CodigoSKU = sk.CodigoSKU AND e.NombreTienda = t.NombreTienda
+WHERE m.TipoMovimiento = N'INGRESO'
+  AND m.Origen         = N'CONFIGURACION_INICIAL'
+  AND m.FechaID        = 20260101
+  AND m.LineaID        IS NULL;
+
+-- Capa B: disponibilidad operativa recalculada desde el ledger -------------------
+DECLARE @Disc INT, @Falt INT, @ResExcede INT, @Negativos INT, @DispNeg INT,
+        @ObsComb INT, @ObsUnid INT;
+
+-- Ledger vs resumen (mismas reglas RN-013 que V5, aqui como base de la
+-- disponibilidad que despues se contrasta con RN-010/RN-015).
+;WITH L AS (
+    SELECT SKUID, TiendaID,
+           SUM(CASE WHEN TipoMovimiento IN (N'INGRESO', N'AJUSTE', N'DESCUENTO_DEFINITIVO')
+                    THEN Cantidad ELSE 0 END) AS Sis,
+           SUM(CASE WHEN TipoMovimiento IN (N'RESERVA', N'LIBERACION_RESERVA', N'DESCUENTO_DEFINITIVO')
+                    THEN Cantidad ELSE 0 END) AS Res
+    FROM dbo.FactMovimientoInventario
+    GROUP BY SKUID, TiendaID
+)
+SELECT @Disc = COUNT(*)
 FROM dbo.StockSKUTienda s
-INNER JOIN dbo.DimSKU    sk ON sk.SKUID   = s.SKUID
-INNER JOIN dbo.DimTienda t  ON t.TiendaID = s.TiendaID
-LEFT  JOIN @Esp e ON e.CodigoSKU = sk.CodigoSKU AND e.NombreTienda = t.NombreTienda
-WHERE (s.StockSistema - s.StockReservado) <> ISNULL(e.Disp, 0);
+FULL OUTER JOIN L ON L.SKUID = s.SKUID AND L.TiendaID = s.TiendaID
+WHERE ISNULL(s.StockSistema,   -2147483647) <> ISNULL(L.Sis, 0)
+   OR ISNULL(s.StockReservado, -2147483647) <> ISNULL(L.Res, 0);
 
-SELECT @ConStock  = COUNT(*),
-       @TotalDisp = ISNULL(SUM(StockSistema - StockReservado), 0)
-FROM dbo.StockSKUTienda
-WHERE (StockSistema - StockReservado) > 0;
+-- Cobertura: las 56 combinaciones SKU x Tienda deben existir en el resumen.
+SELECT @Falt = COUNT(*)
+FROM dbo.DimSKU sk
+CROSS JOIN dbo.DimTienda t
+WHERE NOT EXISTS (
+        SELECT 1 FROM dbo.StockSKUTienda s
+        WHERE s.SKUID = sk.SKUID AND s.TiendaID = t.TiendaID);
+
+-- Reglas RN-010/RN-015 sobre el resumen (igual al ledger cuando @Disc = 0)
+-- + agregados observados, que se reportan como informativos.
+SELECT @ResExcede = ISNULL(SUM(CASE WHEN StockReservado > StockSistema              THEN 1 ELSE 0 END), 0),
+       @Negativos = ISNULL(SUM(CASE WHEN StockSistema < 0 OR StockReservado < 0    THEN 1 ELSE 0 END), 0),
+       @DispNeg   = ISNULL(SUM(CASE WHEN (StockSistema - StockReservado) < 0       THEN 1 ELSE 0 END), 0),
+       @ObsComb   = ISNULL(SUM(CASE WHEN (StockSistema - StockReservado) > 0       THEN 1 ELSE 0 END), 0),
+       @ObsUnid   = ISNULL(SUM(StockSistema - StockReservado), 0)
+FROM dbo.StockSKUTienda;
+
+DECLARE @OkV6 BIT = CASE WHEN @CombOk = 5
+                          AND @ConfTotal = 5
+                          AND @ConfFuera = 0
+                          AND @UnidSembradas = 20
+                          AND @Disc = 0
+                          AND @Falt = 0
+                          AND @ResExcede = 0
+                          AND @Negativos = 0
+                          AND @DispNeg = 0
+                     THEN 1 ELSE 0 END;
 
 INSERT INTO @V VALUES
-    (6, N'Disponibilidad esperada (5 filas, 20 u.)',
-        N'desvios=0; con stock=5; total=20',
-        CONCAT(N'desvios=', @Desvios, N'; con stock=', @ConStock, N'; total=', @TotalDisp),
-        CASE WHEN @Desvios = 0 AND @ConStock = 5 AND @TotalDisp = 20 THEN 'OK' ELSE 'FALLA' END);
+    (6, N'Disponibilidad: siembra aprobada (ledger) + invariantes RN-010/15',
+        N'sembrado 5 comb./20 u.; ledger=resumen; RN-010/15; cob=56',
+        CONCAT(N'sembrado=', @CombOk, N'/5, ', @UnidSembradas, N' u. (conf=', @ConfTotal,
+               N', fuera=', @ConfFuera, N'); disc=', @Disc, N'; falt=', @Falt,
+               N'; res>sis=', @ResExcede, N'; neg=', @Negativos, N'; disp<0=', @DispNeg,
+               N'; observado=', @ObsComb, N' comb./', @ObsUnid, N' u.'),
+        CASE WHEN @OkV6 = 1 THEN 'OK' ELSE 'FALLA' END);
 
 -- ---- V7: compatibilidad con sp_CrearPedido, con ROLLBACK -------------------
 /*

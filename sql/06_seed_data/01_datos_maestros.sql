@@ -57,7 +57,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.DimEstado WHERE NombreEstado = N'Devolución')
     INSERT INTO dbo.DimEstado (NombreEstado, EsFinal) VALUES (N'Devolución', 1);
 
 -- -----------------------------------------------------------------------------
--- DimMotivo — 11 motivos, 4 tipos
+-- DimMotivo — 12 motivos, 4 tipos
 -- -----------------------------------------------------------------------------
 IF NOT EXISTS (SELECT 1 FROM dbo.DimMotivo WHERE NombreMotivo = N'voluntaria' AND TipoMotivo = N'cancelacion')
     INSERT INTO dbo.DimMotivo (TipoMotivo, NombreMotivo) VALUES (N'cancelacion', N'voluntaria');
@@ -75,6 +75,16 @@ IF NOT EXISTS (SELECT 1 FROM dbo.DimMotivo WHERE NombreMotivo = N'recepcion_inco
     INSERT INTO dbo.DimMotivo (TipoMotivo, NombreMotivo) VALUES (N'incidencia', N'recepcion_incompleta');
 IF NOT EXISTS (SELECT 1 FROM dbo.DimMotivo WHERE NombreMotivo = N'conteo_fisico' AND TipoMotivo = N'ajuste_stock')
     INSERT INTO dbo.DimMotivo (TipoMotivo, NombreMotivo) VALUES (N'ajuste_stock', N'conteo_fisico');
+IF NOT EXISTS (
+    SELECT 1
+    FROM dbo.DimMotivo
+    WHERE TipoMotivo = 'ajuste_stock'
+      AND NombreMotivo = 'retorno_recojo_vencido'
+)
+BEGIN
+    INSERT INTO dbo.DimMotivo (TipoMotivo, NombreMotivo)
+    VALUES ('ajuste_stock', 'retorno_recojo_vencido');
+END;
 IF NOT EXISTS (SELECT 1 FROM dbo.DimMotivo WHERE NombreMotivo = N'talla_incorrecta' AND TipoMotivo = N'devolucion')
     INSERT INTO dbo.DimMotivo (TipoMotivo, NombreMotivo) VALUES (N'devolucion', N'talla_incorrecta');
 IF NOT EXISTS (SELECT 1 FROM dbo.DimMotivo WHERE NombreMotivo = N'no_cumple_expectativa' AND TipoMotivo = N'devolucion')
@@ -215,6 +225,6 @@ UNION ALL SELECT 'DimCliente', COUNT(*) FROM dbo.DimCliente
 UNION ALL SELECT 'DimProducto', COUNT(*) FROM dbo.DimProducto
 UNION ALL SELECT 'DimSKU', COUNT(*) FROM dbo.DimSKU
 UNION ALL SELECT 'DimFecha', COUNT(*) FROM dbo.DimFecha;
--- Esperado: DimEstado=14, DimMotivo=11, DimArea=4, DimTienda=4, DimCliente=6,
+-- Esperado: DimEstado=14, DimMotivo=12, DimArea=4, DimTienda=4, DimCliente=6,
 -- DimProducto=6, DimSKU=14, DimFecha=90
 GO

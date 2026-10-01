@@ -109,7 +109,20 @@ Datos simulados → SQL Server → Views/consultas analíticas
 
 La capa SQL Server ya incluye el **flujo de estados del pedido** implementado con stored procedures: 14 procedimientos cubren la creación de pedidos, el flujo operativo completo (asignación a picking, picking, incidencias, empacado, despacho/recojo, entrega, vencimiento), cancelaciones y devoluciones. Cada transición valida su estado origen exacto y queda registrada en `FactHistorialEstadoLinea`, la fuente de verdad del estado; `FactPedidoDetalle.EstadoActualID` se mantiene como copia sincronizada automáticamente por el trigger `trg_ActualizarEstadoActual`. Un segundo trigger mantiene actualizado el stock por SKU/tienda.
 
-La arquitectura se irá refinando durante las siguientes fases (views analíticas, ETL y modelo de Power BI).
+La capa de vistas analíticas de la Fase 3 ya está implementada y validada (ver la sección *Vistas analíticas* más abajo). El flujo posterior a la Fase 3 es: **Fase 4 — Datos operativos y escenarios** (pendiente) → ETL / análisis Python → KPIs → Power BI / Control Tower → Hallazgos y recomendaciones. La arquitectura se irá refinando a medida que avancen esas fases.
+
+## 📊 Vistas analíticas
+
+Capa de consumo analítico implementada en `sql/06_views/` y validada por `sql/07_tests/test_vistas.sql` (**60/60 PASS, 0 FAIL**, prueba de solo lectura). Es una capa descriptiva: no calcula SLA, KPIs, tasas ni clasificaciones.
+
+| Vista | Grano | Propósito |
+|---|---|---|
+| `vw_PedidosOperaciones` | 1 fila por `LineaID` | Operación de pedidos: estado, cancelación e incidencias |
+| `vw_TiemposEstados` | 1 episodio por `HistorialID` | Entrada, salida y duración de cada estado (no implementa SLA) |
+| `vw_IncidenciasPicking` | 1 fila por `IncidenciaID` | Análisis descriptivo y trazabilidad de incidencias |
+| `vw_MovimientosInventario` | 1 fila por `MovimientoID` | Ledger analítico de movimientos (signos almacenados, sin `ABS`) |
+| `vw_StockHistorico` | `SKU × Tienda × Fecha` | Stock reconstruido desde el ledger; reconciliación con `StockSKUTienda`: 0 discrepancias |
+| `vw_Devoluciones` | 1 fila por `DevolucionID` | Devoluciones (`FactDevolucion` vacía en el seed actual) |
 
 ## 📂 Estructura del proyecto
 
@@ -121,12 +134,8 @@ ORIGEN/
 │   ├── 01_procesos_y_reglas.md
 │   ├── 02_modelo_de_datos.md
 │   ├── 03_implementacion_sql.md
-│   ├── 04_etl.md
-│   ├── 05_analisis_python.md
-│   ├── 06_kpis.md
-│   ├── 07_power_bi.md
-│   ├── 08_hallazgos_y_recomendaciones.md
-│   └── Glosario.md
+│   ├── 04_datos_operativos.md
+│   └── pruebas/
 ├── data/
 │   ├── raw/
 │   └── processed/
@@ -134,10 +143,11 @@ ORIGEN/
 │   ├── 01_database/
 │   ├── 02_tables/
 │   ├── 03_constraints/
-    ├── 04_triggers/
+│   ├── 04_triggers/
 │   ├── 05_stored_procedures/
+│   ├── 06_seed_data/
 │   ├── 06_views/
-│   └── 07_seed_data/
+│   └── 07_tests/
 ├── etl/
 │   ├── extract/
 │   ├── transform/
@@ -162,8 +172,8 @@ No todos los directorios necesitan existir desde el inicio; se completan a medid
 | Contexto y alcance | Problema, objetivos, preguntas de negocio y alcance |
 | Procesos y reglas | Procesos operativos y reglas de negocio |
 | Modelo de datos | Modelo conceptual, lógico y físico |
-| Implementación SQL | Tablas, restricciones, procedimientos y vistas |
-| ETL | Extracción, transformación y carga |
+| Implementación SQL | Tablas, restricciones, procedimientos, vistas y pruebas |
+| Datos operativos | Decisiones de los scripts de datos maestros y seed |
 | Análisis Python | EDA y análisis exploratorio |
 | KPIs | Definición y cálculo de indicadores |
 | Power BI | Modelo semántico y dashboard |
@@ -171,7 +181,9 @@ No todos los directorios necesitan existir desde el inicio; se completan a medid
 
 ## 🚧 Estado del proyecto
 
-**Fase actual:** Fase 3 — Implementación SQL Server
+**Fase 3 — Implementación SQL y capa analítica: VALIDADA** ✅
+
+**Fase actual:** Fase 4 — Datos operativos y escenarios (pendiente)
 
 - [x] Definición del contexto empresarial
 - [x] Definición del problema rector
@@ -179,15 +191,19 @@ No todos los directorios necesitan existir desde el inicio; se completan a medid
 - [x] Definición del alcance
 - [x] Ciclo de vida del pedido
 - [x] Ciclo de vida del stock
-- [x] Recepción desde CD
-- [x] Gestión de incidencias y matriz de resolución
-- [x] Campaign Readiness
-- [x] Devoluciones
+- [x] Recepción desde CD — proceso y reglas definidos
+- [x] Gestión de incidencias y matriz de resolución — proceso y reglas definidos
+- [x] Campaign Readiness — proceso y reglas definidos
+- [x] Devoluciones — proceso y reglas definidos (su carga y validación operativa corresponden a la Fase 4)
 - [x] Reglas de negocio consolidadas
 - [x] Modelo de datos (dimensiones, hechos, relaciones)
-- [x] Base de datos: tablas, restricciones y datos semilla
+- [x] Base de datos: creación de OrigenDB, tablas (14), restricciones (16 `CHECK` + 26 claves foránea), triggers (2), stored procedures (14) y seed / datos maestros
 - [x] Flujo de estados del pedido (stored procedures + trigger de sincronización)
-- [ ] Views analíticas (resto de la Fase 3)
+- [x] Fase 3 validada (flujo de estados y concurrencia de picking) — [informe de la prueba](docs/pruebas/prueba_concurrencia_picking.md)
+- [x] Vistas analíticas: 6 vistas implementadas en `sql/06_views/` (`vw_PedidosOperaciones`, `vw_TiemposEstados`, `vw_IncidenciasPicking`, `vw_MovimientosInventario`, `vw_StockHistorico`, `vw_Devoluciones`)
+- [x] Test integral de la capa analítica: `sql/07_tests/test_vistas.sql` — **60/60 PASS, 0 FAIL** (solo lectura)
+- [x] Fase 3 — Implementación SQL y capa analítica: VALIDADA
+- [ ] Fase 4 — Datos operativos y escenarios (pendiente)
 - [ ] ETL
 - [ ] Análisis Python
 - [ ] KPIs

@@ -41,6 +41,30 @@ VERSIÓN CORREGIDA (2ª ronda), 2 cambios:
    descontado; la contradicción se mantiene documentada, no se resuelve en
    silencio. Incidencia y vencimiento ya validaban origen exacto: sin
    cambios.
+
+4ª RONDA — corrección del bloqueo 51014 en cancelación por vencimiento:
+
+5. CASO B (retorno de stock por vencimiento de recojo): el flujo real de
+   un pedido `recojo` convierte la reserva en DESCUENTO_DEFINITIVO en
+   sp_ConfirmarPicking (Empaquetado), así que cuando la línea llega a
+   'Disponible para recojo' y luego a 'Vencido' su reserva neta ya es 0.
+   El check original exigía ReservaActiva = Cantidad para TODO motivo y
+   rechazaba esa línea con 51014, dejándola traba­da en Vencido con el
+   stock ya descontado y sin retorno. Ahora esa combinación EXACTA —
+   motivo vencimiento + estado Vencido + reserva neta 0 + descuento
+   definitivo total = -Cantidad — registra un AJUSTE +Cantidad dentro de
+   la MISMA transacción (motivo retorno_recojo_vencido / TipoMotivo
+   ajuste_stock, Origen CANCELACION por convención de la tabla, LineaID
+   NULL porque CK_MovInventario_LineaSegunTipo lo exige) y continúa con
+   la cancelación normal hasta Cancelado.
+   La validación de reservas parciales NO se debilitó: cualquier otra
+   discrepancia (reserva parcial, descuento incompleto o ausente, motivo
+   que no sea vencimiento) sigue cayendo exactamente en el 51014 de
+   siempre. El AJUSTE no puede aplicarse dos veces: al cerrar la
+   transacción la línea queda en 'Cancelado' (estado final) y la
+   validación de origen 51013 la rechaza antes de tocar inventario, sea
+   cual sea la reinvocación posterior (incluida una re-ejecución de
+   sp_ProcesarVencimientosRecojo).
 ===============================================================================
 */
 
@@ -66,7 +90,8 @@ BEGIN
     DECLARE @SKUID INT, @TiendaID INT, @Cantidad INT;
     DECLARE @NombreEstadoActual VARCHAR(40);
     DECLARE @EstadoID_Cancelado INT;
-    DECLARE @ReservaActiva INT;
+    DECLARE @ReservaActiva INT, @DescuentoDefinitivo INT;
+    DECLARE @EsRetornoVencimiento BIT, @MotivoRetornoID INT;
     DECLARE @EstadoFinalID INT, @MotivoFinalID INT;
 
     SELECT @NombreMotivo = NombreMotivo, @TipoMotivoEncontrado = TipoMotivo
@@ -127,15 +152,45 @@ BEGIN
         IF @NombreMotivo = N'vencimiento' AND ISNULL(@NombreEstadoActual, N'') <> N'Vencido'
             THROW 51013, N'Cancelación por vencimiento solo es válida si la línea está en Vencido.', 1;
 
-        SELECT @ReservaActiva = ISNULL(SUM(Cantidad), 0)
+        SELECT
+            @ReservaActiva = ISNULL(SUM(Cantidad), 0),
+            @DescuentoDefinitivo = ISNULL(SUM(CASE WHEN TipoMovimiento = N'DESCUENTO_DEFINITIVO' THEN Cantidad END), 0)
         FROM dbo.FactMovimientoInventario
         WHERE LineaID = @LineaID
           AND TipoMovimiento IN (N'RESERVA', N'LIBERACION_RESERVA', N'DESCUENTO_DEFINITIVO');
 
-        -- CORRECCIÓN: exige coincidencia EXACTA, no solo "> 0". Una reserva
-        -- parcial (ReservaActiva <> Cantidad) es una inconsistencia de
-        -- datos que debe rechazarse, no liberarse a medias.
-        IF @ReservaActiva <> @Cantidad
+        -- CASO A (comportamiento original, intacto): la reserva activa debe
+        -- coincidir EXACTAMENTE con la cantidad de la línea — no basta con
+        -- "> 0". Una reserva parcial (ReservaActiva <> Cantidad) es una
+        -- inconsistencia de datos que debe rechazarse, no liberarse a medias.
+        --
+        -- CASO B (solo motivo vencimiento, línea ya en Vencido): el picking
+        -- convirtió la reserva en DESCUENTO_DEFINITIVO completo antes de
+        -- llegar a 'Disponible para recojo', así que al vencer no queda
+        -- reserva que liberar (ReservaActiva = 0) y el stock se retorna con
+        -- un AJUSTE +Cantidad (motivo retorno_recojo_vencido) en ESTA misma
+        -- transacción. Se exigen las 4 condiciones juntas: reserva neta 0
+        -- SIN descuento completo, o con descuento incompleto, sigue siendo
+        -- una discrepancia y cae en el 51014 de siempre.
+        SET @EsRetornoVencimiento = 0;
+
+        IF @ReservaActiva = @Cantidad
+            SET @EsRetornoVencimiento = 0;
+        ELSE IF @NombreMotivo = N'vencimiento'
+            AND ISNULL(@NombreEstadoActual, N'') = N'Vencido'
+            AND @ReservaActiva = 0
+            AND @DescuentoDefinitivo = -@Cantidad
+        BEGIN
+            SET @EsRetornoVencimiento = 1;
+
+            SELECT @MotivoRetornoID = MotivoID
+            FROM dbo.DimMotivo
+            WHERE NombreMotivo = N'retorno_recojo_vencido' AND TipoMotivo = N'ajuste_stock';
+
+            IF @MotivoRetornoID IS NULL
+                THROW 51000, N'DimMotivo no tiene cargado el motivo "retorno_recojo_vencido" (TipoMotivo = ''ajuste_stock''). Verificar datos semilla.', 1;
+        END
+        ELSE
             THROW 51014, N'Inconsistencia de reserva: se esperaba liberar una reserva activa igual a la cantidad de la línea, pero no coinciden. No se libera una reserva parcial.', 1;
 
         IF @NombreMotivo = N'incidencia_picking'
@@ -148,10 +203,23 @@ BEGIN
                 THROW 51015, N'La incidencia indicada no existe, no pertenece a esta línea, o ya no está abierta.', 1;
         END
 
-        INSERT INTO dbo.FactMovimientoInventario
-            (SKUID, TiendaID, FechaID, FechaHora, TipoMovimiento, Origen, Cantidad, LineaID)
-        VALUES
-            (@SKUID, @TiendaID, @FechaID, SYSDATETIME(), N'LIBERACION_RESERVA', N'CANCELACION', -@ReservaActiva, @LineaID);
+        IF @EsRetornoVencimiento = 0
+            INSERT INTO dbo.FactMovimientoInventario
+                (SKUID, TiendaID, FechaID, FechaHora, TipoMovimiento, Origen, Cantidad, LineaID)
+            VALUES
+                (@SKUID, @TiendaID, @FechaID, SYSDATETIME(), N'LIBERACION_RESERVA', N'CANCELACION', -@ReservaActiva, @LineaID);
+        ELSE
+            -- Retorno por vencimiento de recojo (caso B): AJUSTE con signo +
+            -- porque el stock ya había salido por DESCUENTO_DEFINITIVO.
+            -- LineaID NULL porque CK_MovInventario_LineaSegunTipo exige que
+            -- AJUSTE no tenga línea asociada; Origen = CANCELACION (la
+            -- convención ya documentada en FactMovimientoInventario, no se
+            -- inventa un origen nuevo); MotivoID = motivo de tipo
+            -- ajuste_stock que identifica el motivo del retorno.
+            INSERT INTO dbo.FactMovimientoInventario
+                (SKUID, TiendaID, FechaID, FechaHora, TipoMovimiento, Origen, Cantidad, LineaID, MotivoID)
+            VALUES
+                (@SKUID, @TiendaID, @FechaID, SYSDATETIME(), N'AJUSTE', N'CANCELACION', @Cantidad, NULL, @MotivoRetornoID);
 
         UPDATE dbo.FactPedidoDetalle
         SET MotivoCancelacionID = @MotivoID

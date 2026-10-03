@@ -2,7 +2,7 @@
 
 Proyecto de analítica de operaciones e-commerce orientado al monitoreo de pedidos, inventario, picking y cumplimiento de la promesa al cliente.
 
-## 📌 Descripción
+## Descripción
 
 Origen es un proyecto de analítica de datos basado en un retailer ficticio de moda y lifestyle con operación omnicanal (venta online, despacho a domicilio y Click & Collect).
 
@@ -10,7 +10,7 @@ El proyecto busca representar y analizar problemas reales de una operación e-co
 
 El objetivo no es construir un ERP ni replicar todo el ecosistema de e-commerce, sino desarrollar una solución analítica enfocada en **operaciones e-commerce**, utilizando datos simulados con patrones realistas de negocio.
 
-## 🎯 Problema de negocio
+## Problema de negocio
 
 Origen enfrenta situaciones en las que el stock mostrado por el sistema no coincide con la disponibilidad física real. Esto puede provocar que un pedido sea aceptado correctamente por el sistema, pero posteriormente falle durante el picking porque el producto no puede ser encontrado o no existe la cantidad necesaria.
 
@@ -40,7 +40,7 @@ Pregunta central del proyecto:
 
 En este proyecto, "vender mejor" se entiende como **evitar pérdidas de ventas por fallas operativas**, no como desarrollar una estrategia de marketing o pricing.
 
-## 🎯 Objetivo
+## Objetivo
 
 Diseñar y construir una solución analítica que permita:
 
@@ -54,7 +54,7 @@ Diseñar y construir una solución analítica que permita:
 - Preparar la operación para periodos de alta demanda y campañas.
 - Generar recomendaciones accionables a partir de los datos.
 
-## 🔎 Principales preguntas de negocio
+## Principales preguntas de negocio
 
 **Pedidos y cliente**
 - ¿Cuál es la tasa de cancelación por tienda, categoría y periodo?
@@ -76,7 +76,7 @@ Diseñar y construir una solución analítica que permita:
 **Devoluciones**
 - ¿Cuál es la tasa de devolución por categoría, tienda y periodo?
 
-## 🏗️ Alcance
+## Alcance
 
 **Dentro del alcance:** pedidos, inventario, stock sistema vs. físico, picking e incidencias, ciclo de vida del pedido, recepción simplificada desde CD, SLA, cancelaciones, tasa de devoluciones, matriz de resolución de incidencias, Campaign Readiness, KPIs, Control Tower en Power BI.
 
@@ -84,11 +84,11 @@ Diseñar y construir una solución analítica que permita:
 
 Estas funcionalidades podrían desarrollarse como proyectos o extensiones independientes.
 
-## 🏢 Modelo de negocio
+## Modelo de negocio
 
 Origen es un retailer ficticio de moda y lifestyle (ropa, calzado, accesorios, perfumería), con operación omnicanal: venta online, despacho a domicilio, Click & Collect, preparación desde tiendas y abastecimiento desde un Centro de Distribución.
 
-## 🛠️ Tecnologías
+## Tecnologías
 
 | Tecnología | Uso |
 |---|---|
@@ -99,7 +99,7 @@ Origen es un retailer ficticio de moda y lifestyle (ropa, calzado, accesorios, p
 
 Las herramientas adicionales se incorporarán únicamente cuando una necesidad concreta del proyecto las justifique.
 
-## 🔄 Arquitectura
+## Arquitectura
 
 ```
 Datos simulados → SQL Server → Views/consultas analíticas
@@ -111,7 +111,7 @@ La capa SQL Server ya incluye el **flujo de estados del pedido** implementado co
 
 La capa de vistas analíticas de la Fase 3 ya está implementada y validada (ver la sección *Vistas analíticas* más abajo). El flujo posterior a la Fase 3 es: **Fase 4 — Datos operativos y escenarios** (pendiente) → ETL / análisis Python → KPIs → Power BI / Control Tower → Hallazgos y recomendaciones. La arquitectura se irá refinando a medida que avancen esas fases.
 
-## 📊 Vistas analíticas
+## Vistas analíticas
 
 Capa de consumo analítico implementada en `sql/06_views/` y validada por `sql/07_tests/test_vistas.sql` (**60/60 PASS, 0 FAIL**, prueba de solo lectura). Es una capa descriptiva: no calcula SLA, KPIs, tasas ni clasificaciones.
 
@@ -124,7 +124,7 @@ Capa de consumo analítico implementada en `sql/06_views/` y validada por `sql/0
 | `vw_StockHistorico` | `SKU × Tienda × Fecha` | Stock reconstruido desde el ledger; reconciliación con `StockSKUTienda`: 0 discrepancias |
 | `vw_Devoluciones` | 1 fila por `DevolucionID` | Devoluciones (`FactDevolucion` vacía en el seed actual) |
 
-## 📂 Estructura del proyecto
+## Estructura del proyecto
 
 ```
 ORIGEN/
@@ -165,7 +165,7 @@ ORIGEN/
 
 No todos los directorios necesitan existir desde el inicio; se completan a medida que avanza cada fase.
 
-## 📚 Documentación
+## Documentación
 
 | Documento | Contenido |
 |---|---|
@@ -179,7 +179,7 @@ No todos los directorios necesitan existir desde el inicio; se completan a medid
 | Power BI | Modelo semántico y dashboard |
 | Hallazgos | Resultados y recomendaciones |
 
-## 🚧 Estado del proyecto
+## Estado del proyecto
 
 **Fase 3 — Implementación SQL y capa analítica: VALIDADA** ✅
 
@@ -210,11 +210,11 @@ No todos los directorios necesitan existir desde el inicio; se completan a medid
 - [ ] Dashboard Power BI
 - [ ] Hallazgos y recomendaciones
 
-## 👤 Rol simulado
+## Rol simulado
 
 Durante el proyecto se simula el rol de **Analista de Operaciones E-commerce**: monitorear indicadores, detectar desviaciones operativas, analizar causas y proponer acciones de mejora en coordinación con las áreas involucradas.
 
-## 📈 Resultado esperado
+## Resultado esperado
 
 ```
 Datos operativos → Información → Indicadores → Diagnóstico → Acciones
@@ -222,6 +222,6 @@ Datos operativos → Información → Indicadores → Diagnóstico → Acciones
 
 Un Control Tower de Operaciones E-commerce acompañado de documentación técnica y de negocio que explique no solo qué muestran los datos, sino por qué se diseñó la solución de esa manera y qué decisiones puede apoyar.
 
-## 📌 Nota
+## Nota
 
 Origen es un proyecto ficticio desarrollado con fines educativos y de portafolio. Los datos utilizados son simulados y diseñados para representar escenarios plausibles de una operación e-commerce de retail.

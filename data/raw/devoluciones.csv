@@ -1,0 +1,7 @@
+DevolucionID,LineaID,PedidoID,ClienteID,NombreCliente,SKUID,CodigoSKU,ProductoID,NombreProducto,Categoria,TiendaID,NombreTienda,Ciudad,FechaID,Fecha,Anio,Mes,NombreMes,CantidadLinea,MotivoID,NombreMotivo,TipoMotivo,FechaDevolucion
+1002,2065,100003,6,Carla Rojas,5,A10002,4,Polo básico,Ropa,6,Jockey Plaza,Lima,20260109,2026-01-09,2026,1,January,1,15,talla_incorrecta,devolucion,2026-10-02 02:18:40
+1003,2068,100006,9,Diego Flores,16,A60001,9,Perfume Origen Signature,Perfumería,6,Jockey Plaza,Lima,20260117,2026-01-17,2026,1,January,1,15,talla_incorrecta,devolucion,2026-10-02 02:18:40
+1004,2080,100016,7,Jorge Paredes,7,A20001,5,Camisa Oxford,Ropa,6,Jockey Plaza,Lima,20260214,2026-02-14,2026,2,February,1,17,producto_dañado,devolucion,2026-10-02 02:18:40
+1005,2081,100017,8,María Quispe,4,A10001,4,Polo básico,Ropa,7,Real Plaza Arequipa,Arequipa,20260215,2026-02-15,2026,2,February,1,16,no_cumple_expectativa,devolucion,2026-10-02 02:18:40
+1006,2083,100019,4,Ana Torres,4,A10001,4,Polo básico,Ropa,7,Real Plaza Arequipa,Arequipa,20260218,2026-02-18,2026,2,February,3,16,no_cumple_expectativa,devolucion,2026-10-02 02:18:40
+1007,2085,100021,6,Carla Rojas,11,A40001,7,Zapatilla urbana,Calzado,8,Mall Aventura Trujillo,Trujillo,20260222,2026-02-22,2026,2,February,2,17,producto_dañado,devolucion,2026-10-02 02:18:40

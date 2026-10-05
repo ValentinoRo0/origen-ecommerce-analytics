@@ -1,0 +1,59 @@
+LineaID,PedidoID,ClienteID,NombreCliente,SKUID,CodigoSKU,NombreProducto,Categoria,TiendaID,NombreTienda,Ciudad,FechaID,Fecha,Anio,Mes,NombreMes,EsCampania,NombreCampania,Canal,Cantidad,EstadoActual,EsFinal,MotivoCancelacion,Cancelada,NIncidencias,TieneIncidencia,TipoIncidencia,MotivoIncidencia
+53,990001,4,Ana Torres,4,A10001,Polo básico,Ropa,6.0,Jockey Plaza,Lima,20260102,2026-01-02,2026,1,Enero,False,,recojo,1,Completado,True,,0,1,1,no_encontrado,no_encontrado
+54,990002,4,Ana Torres,10,A30002,Jean slim,Ropa,7.0,Real Plaza Arequipa,Arequipa,20260102,2026-01-02,2026,1,Enero,False,,recojo,1,Cancelado,True,voluntaria,1,0,0,,
+55,990003,4,Ana Torres,10,A30002,Jean slim,Ropa,,,,20260102,2026-01-02,2026,1,Enero,False,,recojo,1,Rechazado,True,,0,0,0,,
+56,990012,4,Ana Torres,11,A40001,Zapatilla urbana,Calzado,,,,20260102,2026-01-02,2026,1,Enero,False,,recojo,3,Rechazado,True,,0,0,0,,
+1054,990020,4,Ana Torres,4,A10001,Polo básico,Ropa,6.0,Jockey Plaza,Lima,20260102,2026-01-02,2026,1,Enero,False,,despacho,1,Completado,True,,0,0,0,,
+1055,990030,4,Ana Torres,4,A10001,Polo básico,Ropa,6.0,Jockey Plaza,Lima,20260102,2026-01-02,2026,1,Enero,False,,recojo,1,Cancelado,True,vencimiento,1,0,0,,
+2061,100001,4,Ana Torres,5,A10002,Polo básico,Ropa,6.0,Jockey Plaza,Lima,20260102,2026-01-02,2026,1,Enero,False,,recojo,2,Completado,True,,0,0,0,,
+2062,100001,4,Ana Torres,7,A20001,Camisa Oxford,Ropa,6.0,Jockey Plaza,Lima,20260102,2026-01-02,2026,1,Enero,False,,recojo,4,Completado,True,,0,0,0,,
+2063,100002,5,Luis Mamani,4,A10001,Polo básico,Ropa,7.0,Real Plaza Arequipa,Arequipa,20260105,2026-01-05,2026,1,January,False,,despacho,1,Completado,True,,0,0,0,,
+2064,100002,5,Luis Mamani,9,A30001,Jean slim,Ropa,7.0,Real Plaza Arequipa,Arequipa,20260105,2026-01-05,2026,1,January,False,,despacho,1,Completado,True,,0,0,0,,
+2065,100003,6,Carla Rojas,5,A10002,Polo básico,Ropa,6.0,Jockey Plaza,Lima,20260107,2026-01-07,2026,1,January,False,,recojo,1,Completado,True,,0,0,0,,
+2066,100004,7,Jorge Paredes,5,A10002,Polo básico,Ropa,6.0,Jockey Plaza,Lima,20260109,2026-01-09,2026,1,January,False,,recojo,2,Completado,True,,0,0,0,,
+2067,100005,8,María Quispe,7,A20001,Camisa Oxford,Ropa,6.0,Jockey Plaza,Lima,20260112,2026-01-12,2026,1,January,False,,recojo,1,Completado,True,,0,0,0,,
+2068,100006,9,Diego Flores,16,A60001,Perfume Origen Signature,Perfumería,6.0,Jockey Plaza,Lima,20260114,2026-01-14,2026,1,January,False,,recojo,1,Completado,True,,0,0,0,,
+2069,100007,4,Ana Torres,16,A60001,Perfume Origen Signature,Perfumería,6.0,Jockey Plaza,Lima,20260116,2026-01-16,2026,1,January,False,,recojo,1,Completado,True,,0,0,0,,
+2070,100008,5,Luis Mamani,5,A10002,Polo básico,Ropa,6.0,Jockey Plaza,Lima,20260119,2026-01-19,2026,1,January,False,,despacho,1,Cancelado,True,voluntaria,1,0,0,,
+2071,100009,6,Carla Rojas,5,A10002,Polo básico,Ropa,6.0,Jockey Plaza,Lima,20260121,2026-01-21,2026,1,January,False,,recojo,1,Cancelado,True,voluntaria,1,0,0,,
+2072,100010,7,Jorge Paredes,10,A30002,Jean slim,Ropa,7.0,Real Plaza Arequipa,Arequipa,20260123,2026-01-23,2026,1,January,False,,recojo,1,Completado,True,,0,0,0,,
+2073,100011,8,María Quispe,14,A50001,Mochila urbana,Accesorios,7.0,Real Plaza Arequipa,Arequipa,20260126,2026-01-26,2026,1,January,False,,recojo,2,Completado,True,,0,0,0,,
+2074,100012,9,Diego Flores,8,A20002,Camisa Oxford,Ropa,,,,20260128,2026-01-28,2026,1,January,False,,despacho,4,Rechazado,True,,0,0,0,,
+2075,100013,4,Ana Torres,16,A60001,Perfume Origen Signature,Perfumería,6.0,Jockey Plaza,Lima,20260202,2026-02-02,2026,2,February,False,,recojo,2,Completado,True,,0,0,0,,
+2076,100013,4,Ana Torres,5,A10002,Polo básico,Ropa,6.0,Jockey Plaza,Lima,20260202,2026-02-02,2026,2,February,False,,recojo,1,Cancelado,True,voluntaria,1,0,0,,
+2077,100014,5,Luis Mamani,4,A10001,Polo básico,Ropa,7.0,Real Plaza Arequipa,Arequipa,20260204,2026-02-04,2026,2,February,False,,despacho,3,Completado,True,,0,0,0,,
+2078,100014,5,Luis Mamani,14,A50001,Mochila urbana,Accesorios,7.0,Real Plaza Arequipa,Arequipa,20260204,2026-02-04,2026,2,February,False,,despacho,1,Cancelado,True,incidencia_picking,1,1,1,dañado,dañado
+2079,100015,6,Carla Rojas,5,A10002,Polo básico,Ropa,6.0,Jockey Plaza,Lima,20260206,2026-02-06,2026,2,February,False,,recojo,3,Cancelado,True,incidencia_picking,1,1,1,no_encontrado,no_encontrado
+2080,100016,7,Jorge Paredes,7,A20001,Camisa Oxford,Ropa,6.0,Jockey Plaza,Lima,20260209,2026-02-09,2026,2,February,False,,recojo,1,Completado,True,,0,1,1,dañado,dañado
+2081,100017,8,María Quispe,4,A10001,Polo básico,Ropa,7.0,Real Plaza Arequipa,Arequipa,20260211,2026-02-11,2026,2,February,False,,recojo,1,Completado,True,,0,0,0,,
+2082,100018,9,Diego Flores,14,A50001,Mochila urbana,Accesorios,7.0,Real Plaza Arequipa,Arequipa,20260213,2026-02-13,2026,2,February,False,,recojo,1,Completado,True,,0,0,0,,
+2083,100019,4,Ana Torres,4,A10001,Polo básico,Ropa,7.0,Real Plaza Arequipa,Arequipa,20260216,2026-02-16,2026,2,February,False,,despacho,3,Completado,True,,0,0,0,,
+2084,100020,5,Luis Mamani,4,A10001,Polo básico,Ropa,7.0,Real Plaza Arequipa,Arequipa,20260218,2026-02-18,2026,2,February,False,,despacho,2,Completado,True,,0,0,0,,
+2085,100021,6,Carla Rojas,11,A40001,Zapatilla urbana,Calzado,8.0,Mall Aventura Trujillo,Trujillo,20260220,2026-02-20,2026,2,February,False,,recojo,2,Completado,True,,0,0,0,,
+2086,100022,7,Jorge Paredes,8,A20002,Camisa Oxford,Ropa,,,,20260224,2026-02-24,2026,2,February,False,,recojo,3,Rechazado,True,,0,0,0,,
+2087,100023,8,María Quispe,13,A40003,Zapatilla urbana,Calzado,,,,20260226,2026-02-26,2026,2,February,False,,despacho,2,Rechazado,True,,0,0,0,,
+2088,100024,9,Diego Flores,12,A40002,Zapatilla urbana,Calzado,8.0,Mall Aventura Trujillo,Trujillo,20260302,2026-03-02,2026,3,March,False,,recojo,1,Completado,True,,0,0,0,,
+2089,100024,9,Diego Flores,17,A60002,Perfume Origen Signature,Perfumería,8.0,Mall Aventura Trujillo,Trujillo,20260302,2026-03-02,2026,3,March,False,,recojo,1,Incidencia de picking,False,,0,1,1,cantidad_insuficiente,cantidad_insuficiente
+2090,100025,4,Ana Torres,4,A10001,Polo básico,Ropa,7.0,Real Plaza Arequipa,Arequipa,20260304,2026-03-04,2026,3,March,False,,despacho,1,Completado,True,,0,0,0,,
+2091,100026,5,Luis Mamani,14,A50001,Mochila urbana,Accesorios,7.0,Real Plaza Arequipa,Arequipa,20260305,2026-03-05,2026,3,March,False,,despacho,2,Completado,True,,0,0,0,,
+2092,100027,6,Carla Rojas,9,A30001,Jean slim,Ropa,7.0,Real Plaza Arequipa,Arequipa,20260306,2026-03-06,2026,3,March,False,,despacho,1,Cancelado,True,incidencia_picking,1,1,1,cantidad_insuficiente,cantidad_insuficiente
+2093,100028,7,Jorge Paredes,14,A50001,Mochila urbana,Accesorios,7.0,Real Plaza Arequipa,Arequipa,20260309,2026-03-09,2026,3,March,False,,recojo,1,Incidencia de picking,False,,0,1,1,no_encontrado,no_encontrado
+2094,100029,8,María Quispe,12,A40002,Zapatilla urbana,Calzado,8.0,Mall Aventura Trujillo,Trujillo,20260310,2026-03-10,2026,3,March,False,,recojo,1,Completado,True,,0,0,0,,
+2095,100030,9,Diego Flores,17,A60002,Perfume Origen Signature,Perfumería,8.0,Mall Aventura Trujillo,Trujillo,20260311,2026-03-11,2026,3,March,False,,recojo,2,Completado,True,,0,0,0,,
+2096,100031,4,Ana Torres,12,A40002,Zapatilla urbana,Calzado,8.0,Mall Aventura Trujillo,Trujillo,20260312,2026-03-12,2026,3,March,False,,despacho,2,Completado,True,,0,0,0,,
+2097,100032,5,Luis Mamani,9,A30001,Jean slim,Ropa,,,,20260313,2026-03-13,2026,3,March,False,,recojo,4,Rechazado,True,,0,0,0,,
+2098,100033,6,Carla Rojas,12,A40002,Zapatilla urbana,Calzado,,,,20260314,2026-03-14,2026,3,March,False,,despacho,1,Rechazado,True,,0,0,0,,
+2099,100034,7,Jorge Paredes,17,A60002,Perfume Origen Signature,Perfumería,8.0,Mall Aventura Trujillo,Trujillo,20260315,2026-03-15,2026,3,March,True,Cyber Origen,despacho,2,Completado,True,,0,0,0,,
+2100,100035,8,María Quispe,14,A50001,Mochila urbana,Accesorios,7.0,Real Plaza Arequipa,Arequipa,20260316,2026-03-16,2026,3,March,True,Cyber Origen,despacho,1,Completado,True,,0,0,0,,
+2101,100035,8,María Quispe,9,A30001,Jean slim,Ropa,7.0,Real Plaza Arequipa,Arequipa,20260316,2026-03-16,2026,3,March,True,Cyber Origen,despacho,1,Cancelado,True,voluntaria,1,0,0,,
+2102,100036,9,Diego Flores,12,A40002,Zapatilla urbana,Calzado,8.0,Mall Aventura Trujillo,Trujillo,20260317,2026-03-17,2026,3,March,True,Cyber Origen,despacho,1,Completado,True,,0,1,1,no_encontrado,no_encontrado
+2103,100037,4,Ana Torres,7,A20001,Camisa Oxford,Ropa,6.0,Jockey Plaza,Lima,20260318,2026-03-18,2026,3,March,True,Cyber Origen,recojo,2,Completado,True,,0,0,0,,
+2104,100037,4,Ana Torres,16,A60001,Perfume Origen Signature,Perfumería,6.0,Jockey Plaza,Lima,20260318,2026-03-18,2026,3,March,True,Cyber Origen,recojo,1,Completado,True,,0,1,1,cantidad_insuficiente,cantidad_insuficiente
+2105,100038,5,Luis Mamani,7,A20001,Camisa Oxford,Ropa,6.0,Jockey Plaza,Lima,20260318,2026-03-18,2026,3,March,True,Cyber Origen,recojo,1,Cancelado,True,vencimiento,1,0,0,,
+2106,100039,6,Carla Rojas,12,A40002,Zapatilla urbana,Calzado,8.0,Mall Aventura Trujillo,Trujillo,20260318,2026-03-18,2026,3,March,True,Cyber Origen,recojo,3,Cancelado,True,vencimiento,1,0,0,,
+2107,100040,7,Jorge Paredes,17,A60002,Perfume Origen Signature,Perfumería,8.0,Mall Aventura Trujillo,Trujillo,20260319,2026-03-19,2026,3,March,True,Cyber Origen,despacho,2,Completado,True,,0,1,1,no_encontrado,no_encontrado
+2108,100041,8,María Quispe,12,A40002,Zapatilla urbana,Calzado,8.0,Mall Aventura Trujillo,Trujillo,20260320,2026-03-20,2026,3,March,True,Cyber Origen,recojo,1,Cancelado,True,voluntaria,1,0,0,,
+2109,100042,9,Diego Flores,17,A60002,Perfume Origen Signature,Perfumería,8.0,Mall Aventura Trujillo,Trujillo,20260321,2026-03-21,2026,3,March,True,Cyber Origen,despacho,1,Cancelado,True,voluntaria,1,0,0,,
+2110,100043,4,Ana Torres,15,A50002,Mochila urbana,Accesorios,,,,20260323,2026-03-23,2026,3,March,False,,recojo,3,Rechazado,True,,0,0,0,,
+2111,100044,5,Luis Mamani,6,A10003,Polo básico,Ropa,,,,20260326,2026-03-26,2026,3,March,False,,despacho,2,Rechazado,True,,0,0,0,,
+2112,100045,6,Carla Rojas,10,A30002,Jean slim,Ropa,,,,20260330,2026-03-30,2026,3,March,False,,recojo,1,Rechazado,True,,0,0,0,,

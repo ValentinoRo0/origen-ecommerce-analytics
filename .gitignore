@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Credenciales locales — nunca subir al repositorio
+.env*
+!.env.example

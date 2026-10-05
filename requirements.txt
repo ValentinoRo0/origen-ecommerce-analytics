@@ -1,0 +1,9 @@
+# ORIGEN — Paso 1 (extracción de vistas a CSV) y Paso 2 (EDA en notebook)
+# Extracción: pandas + pyodbc | EDA (python/eda/01_eda.ipynb): matplotlib
+# Ejecución headless del notebook (validación): nbformat + nbclient
+# Sin seaborn, sin plotly, sin librerías de ML.
+pandas==3.0.3
+pyodbc==5.3.0
+matplotlib==3.11.0
+nbformat==5.11.1
+nbclient==0.11.0

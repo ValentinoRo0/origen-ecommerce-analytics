@@ -1,7 +1,7 @@
 # ORIGEN — Datos operativos
-## Fase 4 🟡 En curso
+## Fase 4 ✅ Implementada y validada
 
-> Estado: Bloque 3 **implementado y validado — 7/7 validaciones OK** (resultado en §2.4). Bloque 4 **implementado parcialmente**: sesión 1 ejecutada con validaciones H **37/37 OK** y regresión `test_vistas.sql` **60/60 PASS** (2026-10-02); sesión 2 pendiente de cumplir el gate temporal real (§3).
+> Estado: **Fase 4 — IMPLEMENTADA Y VALIDADA.** Bloque 3 **implementado y validado — 7/7 validaciones OK** (resultado en §2.4). Bloque 4 **completado**: sesión 1 ejecutada con validaciones H **37/37 OK** y regresión `test_vistas.sql` **60/60 PASS** (2026-10-02); sesión 2 ejecutada al cumplirse el gate temporal real (2026-10-05) con el estado final verificado y validaciones J **37/37 OK** (Q01–Q13: 13/13; C01–C24: 24/24) — reporte `ESTADO BLOQUE 4: IMPLEMENTADO Y VALIDADO` (§3.5).
 
 ---
 
@@ -64,6 +64,8 @@ Son dos magnitudes distintas y no deben confundirse:
 >   | `A40001 @ Mall Aventura Trujillo` | 0 / 0 |
 >
 > Este segundo bloque es el estado vigente tras la sesión 1; las 18 unidades de la tabla anterior son el snapshot histórico del cierre de la Fase 3.
+
+> **2026-10-05 — después de la sesión 2 del Bloque 4:** `SUM(StockSistema) = **47**` en **12 combinaciones**; stock disponible **45** según Q11; la ancla `A10001 @ Jockey Plaza` sigue en **8 / 0**; **0** stock negativo (verificado por consulta).
 
 ### 2.4. Validaciones
 
@@ -140,36 +142,43 @@ La sesión 2 solo se ejecuta cuando se cumple, con tiempo real, un día natural 
 
 Mientras no se cumple, el script imprime el aviso correspondiente, ejecuta `RETURN` y **no** se ejecuta la sesión 2 (comprobado el 2026-10-02: la BD permanece en el estado de la sesión 1).
 
+El gate se cumplió el **2026-10-05** (`DATEDIFF = 3` días desde la primera recepción) y la sesión 2 se ejecutó ese día (§3.5).
+
 Nota de control de flujo: el guard que decide si las validaciones H se omiten (el escenario ya avanzó a sesión 2) se encuentra **en el mismo batch que las validaciones H**, de modo que `RETURN` termina ese batch completo y evita ejecutar validaciones propias del estado de sesión 1. Es una corrección de control de flujo, no un cambio de arquitectura.
 
-### 3.5. Sesión 2 — pendiente del gate temporal
+### 3.5. Sesión 2 — ejecutada 2026-10-05
 
-Operaciones previstas (ya implementadas en el script, pendientes de ejecutar):
+Operaciones ejecutadas (sección I, transacción única con `COMMIT`):
 
 - escalar las 4 incidencias de picking al área de Operaciones (`AreaEscaladaID = 2`);
-- cancelar 3 líneas por incidencia;
+- cancelar 3 líneas por incidencia (MotivoID 8);
 - resolver la incidencia de recepción del pedido `100040` hasta **Completado**;
 - escalar la recepción pendiente a Abastecimiento (`AreaEscaladaID = 3`);
 - procesar los 2 vencimientos de recojo con `sp_ProcesarVencimientosRecojo`.
 
-Resultado **esperado** (aún no ejecutado, por eso son expectativas y no resultados):
+Resultado observado (verificado por consulta el 2026-10-05):
 
-| Métrica | Esperado |
+| Métrica | Observado |
 |---|---|
+| Pedidos / líneas | **45 / 52** |
 | Estados de líneas (Com/Can/Rech/Inc/Disp) | **31 / 11 / 8 / 2 / 0** |
 | Ledger de movimientos | **116** |
 | Devoluciones | **6** |
 | Líneas en "Disponible para recojo" | **0** |
-| Matriz de incidencias | la que exigen las validaciones J del script |
-| Reporte final | `ESTADO BLOQUE 4: IMPLEMENTADO Y VALIDADO` |
+| Incidencias totales | **11** (picking **9**, recepción **2**) |
+| Matriz de incidencias | `ne 2/1/1/0; ci 1/1/1/0; da 1/1/0/0; rec 1/0/0/1` (11 en total) |
+| Estados de incidencia (C18) | **5/3/2/1**, total 11 (C19 OK) |
+| Stock | `SUM(StockSistema)` **47** u. en 12 combinaciones; disponible **45** (Q11); **0** negativos; ancla `A10001 @ Jockey Plaza`: stock **8/0**, vista **8/0/8**, **8** movimientos |
+
+**Validaciones J (resultado final): 37/37 OK** — Q01–Q13: **13/13**; C01–C24: **24/24**. Tras corregir en el script el literal esperado de Q06/C19 (`ne 2/1/1/0`, consistente con C17 `ne=4`, C18 `total=11` y C21 `picking=9`; los datos no se tocaron), la validación final confirmó la matriz completa. Reporte final: **`ESTADO BLOQUE 4: IMPLEMENTADO Y VALIDADO`**.
 
 ---
 
-## 4. Pendiente
+## 4. Cierre de la Fase 4
 
 - ~~Ejecutar el script en SSMS y reportar la tabla de validaciones (Bloque 3).~~ Completado el 2026-10-01: **7/7 validaciones OK** (§2.4).
 - ~~Bloque 4, sesión 1.~~ Completada el 2026-10-02: **H 37/37 OK** y regresión **60/60 PASS** (§3.3).
-- Bloque 4, sesión 2: **pendiente** del gate temporal real (§3.4).
-- Validaciones J (resultado final del Bloque 4): **pendientes** de la sesión 2.
-- Regresión final de `test_vistas.sql` después de la sesión 2: **pendiente**.
-- Actualización final de esta documentación después de la sesión 2: **pendiente**.
+- ~~Bloque 4, sesión 2.~~ Ejecutada el 2026-10-05 al cumplirse el gate temporal: estado final verificado (§3.5).
+- Validaciones J finales: **37/37 OK** (Q01–Q13: 13/13; C01–C24: 24/24) → **`ESTADO BLOQUE 4: IMPLEMENTADO Y VALIDADO`**.
+
+**Fase 4: IMPLEMENTADA Y VALIDADA.** No quedan pendientes en esta fase. El proyecto completo (ETL, análisis Python, KPIs, Power BI, hallazgos) corresponde a las fases siguientes.

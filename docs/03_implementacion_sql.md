@@ -1,7 +1,7 @@
 # ORIGEN — Implementación SQL Server
 ## Fase 3 ✅ VALIDADA — Base de datos, dimensiones, hechos, flujo de estados, vistas analíticas y pruebas
 
-> **Estado: Fase 3 — Estado: VALIDADA.** La capa analítica SQL (6 vistas) está implementada y validada con `sql/07_tests/test_vistas.sql` (**60/60 PASS, 0 FAIL**, prueba de solo lectura). La Fase 4 (datos operativos y escenarios) **no** está completada, ni el proyecto completo.
+> **Estado: Fase 3 — VALIDADA; Fase 4 — IMPLEMENTADA Y VALIDADA.** La capa analítica SQL (6 vistas) está implementada y validada con `sql/07_tests/test_vistas.sql` (**60/60 PASS, 0 FAIL**, prueba de solo lectura). La Fase 4 (datos operativos y escenarios) está completada y validada (validaciones finales **37/37 OK**, ver `04_datos_operativos.md`); el proyecto completo (ETL, análisis Python, KPIs, Power BI, hallazgos) **no** está completado.
 
 ---
 
@@ -205,7 +205,7 @@ El fork desde `Empaquetado` es el único punto donde el canal se valida explíci
 ### 7.6. `vw_Devoluciones` (`06_views/06_vw_devoluciones.sql`)
 
 - **Grano**: 1 fila por `DevolucionID`.
-- `FactDevolucion` está **vacía en el seed actual** → la vista devuelve 0 filas por ahora; es esperado, no un fallo.
+- `FactDevolucion` contiene **6 devoluciones** sembradas en la Fase 4 → la vista devuelve **6 filas**.
 - **No existe una FK modelada entre `FactDevolucion` y `FactMovimientoInventario`**, y tampoco una cantidad devuelta en la tabla — por eso **no se infiere** un movimiento de reingreso de stock ni se inventa una columna de cantidad: se expone `CantidadLinea` (la cantidad de la línea pedida), sin relación con movimientos.
 
 ---
@@ -236,7 +236,7 @@ Las validaciones incluyen:
 - **Incidencias**: motivo, área, área escalada, fechas, duración recalculada y `LineaID` opcional (los `NULL` de recepción no se marcan como error).
 - **Reconstrucción histórica de stock**: conteo esperado calculado desde las dimensiones (sin hardcodear 5040), densidad por par SKU/tienda, movimientos diarios y acumulados recalculados desde el ledger, `StockDisponible = StockSistema − StockReservado`, y negativos (reportados, no corregidos: 0/0/0).
 - **Reconciliación contra `StockSKUTienda`**: último día (`MAX(DimFecha)` calculado **sin usar la vista**) por SKU/tienda → **0 discrepancias**, más el caso semilla SKU 4 / Tienda 6 (`8 / 0 / 8`).
-- **Devoluciones**: grano, `LineaID` y dimensiones — 0/0 con la base vacía, sin fabricar datos.
+- **Devoluciones**: grano (`COUNT(*)` de la vista = `COUNT(*)` de `FactDevolucion`), duplicados, correspondencia base↔vista, `LineaID` sin huérfanos y dimensiones — con las **6 devoluciones** de la Fase 4, sin fabricar datos.
 
 ### 8.2. Otras pruebas de la fase
 
@@ -256,6 +256,6 @@ La capa analítica SQL está **implementada y validada**:
 - **6 vistas analíticas** en `sql/06_views/` (§7).
 - **Prueba integral** `sql/07_tests/test_vistas.sql`: **60/60 PASS, 0 FAIL** (§8).
 
-**No** se ha completado la Fase 4 (datos operativos y escenarios), ni el proyecto completo (ETL, análisis Python, KPIs, Power BI, hallazgos) — esos siguen siendo las etapas pendientes.
+**Fase 4 — IMPLEMENTADA Y VALIDADA** (datos operativos y escenarios: validaciones finales **37/37 OK**, ver `04_datos_operativos.md`). El proyecto completo (ETL, análisis Python, KPIs, Power BI, hallazgos) sigue pendiente.
 
 > **Nota de consistencia**: las cabeceras de los scripts de `sql/06_seed_data/` conservan la etiqueta "Fase 4" de la planificación original (bloques aprobados); unificar esa etiqueta con el alcance de cierre de la Fase 3 queda pendiente de decisión.

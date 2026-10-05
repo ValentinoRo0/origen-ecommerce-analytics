@@ -1719,8 +1719,8 @@ SELECT @s = CONCAT(
 
 INSERT INTO @V (Nro, Validacion, Esperado, Obtenido, Resultado) VALUES
     (6, N'Q06 Matriz incidencias tipo x estado (res/nores/atenc/esc)',
-        N'ne 1/1/1/0; ci 1/1/1/0; da 1/1/0/0; rec 1/0/0/1', @s,
-        CASE WHEN @s = N'ne 1/1/1/0; ci 1/1/1/0; da 1/1/0/0; rec 1/0/0/1'
+        N'ne 2/1/1/0; ci 1/1/1/0; da 1/1/0/0; rec 1/0/0/1', @s,
+        CASE WHEN @s = N'ne 2/1/1/0; ci 1/1/1/0; da 1/1/0/0; rec 1/0/0/1'
              THEN 'OK' ELSE 'FALLA' END);
 
 -- ---- Q07: escalamientos (FINAL: area2=4, area3=1) ------------------------
@@ -2131,8 +2131,8 @@ INSERT INTO @V (Nro, Validacion, Esperado, Obtenido, Resultado) VALUES
 -- ---- C19: matriz §25 final ------------------------------------------------
 INSERT INTO @V (Nro, Validacion, Esperado, Obtenido, Resultado) VALUES
     (32, N'C19 Matriz §25 tipo x estado (11 incidencias)',
-        N'ne 1/1/1/0; ci 1/1/1/0; da 1/1/0/0; rec 1/0/0/1', @s,
-        CASE WHEN @s = N'ne 1/1/1/0; ci 1/1/1/0; da 1/1/0/0; rec 1/0/0/1'
+        N'ne 2/1/1/0; ci 1/1/1/0; da 1/1/0/0; rec 1/0/0/1', @s,
+        CASE WHEN @s = N'ne 2/1/1/0; ci 1/1/1/0; da 1/1/0/0; rec 1/0/0/1'
              THEN 'OK' ELSE 'FALLA' END);
 
 -- ---- C20: escaladas con area (FINAL: 4 + 1) ------------------------------

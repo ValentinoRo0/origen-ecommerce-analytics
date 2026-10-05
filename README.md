@@ -109,7 +109,7 @@ Datos simulados → SQL Server → Views/consultas analíticas
 
 La capa SQL Server ya incluye el **flujo de estados del pedido** implementado con stored procedures: 14 procedimientos cubren la creación de pedidos, el flujo operativo completo (asignación a picking, picking, incidencias, empacado, despacho/recojo, entrega, vencimiento), cancelaciones y devoluciones. Cada transición valida su estado origen exacto y queda registrada en `FactHistorialEstadoLinea`, la fuente de verdad del estado; `FactPedidoDetalle.EstadoActualID` se mantiene como copia sincronizada automáticamente por el trigger `trg_ActualizarEstadoActual`. Un segundo trigger mantiene actualizado el stock por SKU/tienda.
 
-La capa de vistas analíticas de la Fase 3 ya está implementada y validada (ver la sección *Vistas analíticas* más abajo). El flujo posterior a la Fase 3 es: **Fase 4 — Datos operativos y escenarios** (pendiente) → ETL / análisis Python → KPIs → Power BI / Control Tower → Hallazgos y recomendaciones. La arquitectura se irá refinando a medida que avancen esas fases.
+La capa de vistas analíticas de la Fase 3 ya está implementada y validada (ver la sección *Vistas analíticas* más abajo). El flujo posterior a la Fase 3 es: **Fase 4 — Datos operativos y escenarios** (implementada y validada) → ETL / análisis Python → KPIs → Power BI / Control Tower → Hallazgos y recomendaciones. La arquitectura se irá refinando a medida que avancen esas fases.
 
 ## Vistas analíticas
 
@@ -122,7 +122,7 @@ Capa de consumo analítico implementada en `sql/06_views/` y validada por `sql/0
 | `vw_IncidenciasPicking` | 1 fila por `IncidenciaID` | Análisis descriptivo y trazabilidad de incidencias |
 | `vw_MovimientosInventario` | 1 fila por `MovimientoID` | Ledger analítico de movimientos (signos almacenados, sin `ABS`) |
 | `vw_StockHistorico` | `SKU × Tienda × Fecha` | Stock reconstruido desde el ledger; reconciliación con `StockSKUTienda`: 0 discrepancias |
-| `vw_Devoluciones` | 1 fila por `DevolucionID` | Devoluciones (`FactDevolucion` vacía en el seed actual) |
+| `vw_Devoluciones` | 1 fila por `DevolucionID` | Devoluciones (6 filas sembradas en la Fase 4) |
 
 ## Estructura del proyecto
 
@@ -183,7 +183,7 @@ No todos los directorios necesitan existir desde el inicio; se completan a medid
 
 **Fase 3 — Implementación SQL y capa analítica: VALIDADA** ✅
 
-**Fase actual:** Fase 4 — Datos operativos y escenarios (pendiente)
+**Fase 4 — Datos operativos y escenarios: IMPLEMENTADA Y VALIDADA** ✅
 
 - [x] Definición del contexto empresarial
 - [x] Definición del problema rector
@@ -203,7 +203,10 @@ No todos los directorios necesitan existir desde el inicio; se completan a medid
 - [x] Vistas analíticas: 6 vistas implementadas en `sql/06_views/` (`vw_PedidosOperaciones`, `vw_TiemposEstados`, `vw_IncidenciasPicking`, `vw_MovimientosInventario`, `vw_StockHistorico`, `vw_Devoluciones`)
 - [x] Test integral de la capa analítica: `sql/07_tests/test_vistas.sql` — **60/60 PASS, 0 FAIL** (solo lectura)
 - [x] Fase 3 — Implementación SQL y capa analítica: VALIDADA
-- [ ] Fase 4 — Datos operativos y escenarios (pendiente)
+- [x] Bloque 3 — pre-siembra de stock: **7/7 validaciones OK** (`docs/04_datos_operativos.md`)
+- [x] Bloque 4 — sesión 1: validaciones **H 37/37 OK** y regresión **60/60 PASS** (2026-10-02)
+- [x] Bloque 4 — sesión 2: ejecutada 2026-10-05 (estado final verificado); validaciones finales **J 37/37 OK** (Q01–Q13 **13/13**, C01–C24 **24/24**) → `ESTADO BLOQUE 4: IMPLEMENTADO Y VALIDADO`
+- [x] Fase 4 — Datos operativos y escenarios: **implementada y validada** (validaciones finales 37/37 OK)
 - [ ] ETL
 - [ ] Análisis Python
 - [ ] KPIs
